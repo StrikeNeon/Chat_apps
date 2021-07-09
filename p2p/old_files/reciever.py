@@ -6,7 +6,6 @@ from socket import (socket, AF_INET,
 import threading
 
 
-# TODO:end connection with 'exit'
 def connect(socket):
     while True:
         r_msg = socket.recv(1024)
@@ -24,7 +23,7 @@ def receive(socket):
         if s_msg == '':
             pass
         if s_msg.decode() == 'exit':
-            print("wan exit")
+            print("exit")
             break
         else:
             socket.sendall(s_msg)
