@@ -8,9 +8,9 @@ import string
 from threading import Thread
 
 
-class server():
-
-    def __init__(self, port, ip="127.0.0.1"):
+class reception_server():
+    # This serves active users in rooms
+    def __init__(self, port=6660, ip="127.0.0.1"):
         self.server_socket = socket(AF_INET, SOCK_STREAM)
         self.server_socket.setblocking(0)
         self.server_socket.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1)
@@ -20,17 +20,18 @@ class server():
         self.outputs = []
         self.message_queues = {}
 
-    def recieve_msgs(self):
+    # TODO recieve encoded json with user name, ip:port and room request
+    # If this room exists - serve json with active users ip if you are not in room blacklist\room whitelist
+    # If not - add base room structure, set user as host status, serve room created message
+    def serve_keys(self):
         while self.inputs:
             self.readable, self.writable, self.exceptional = select(
                 self.inputs, [], self.inputs)
-            print(self.readable, self.writable)
             for s in self.readable:
                 if s is self.server_socket:
                     connection, client_address = s.accept()
                     connection.setblocking(0)
                     self.inputs.append(connection)
-                    print(self.inputs)
                 else:
                     data = s.recv(1024)
                     if data:
@@ -49,58 +50,80 @@ class server():
                 s.close()
 
 
-class connector():
-    def __init__(self, ip, port):
+class client():
+    def __init__(self, ip, port, username):
         self.connector_socket = socket(AF_INET, SOCK_STREAM)
         self.connector_socket.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1)
-        print("binding")
         self.connector_socket.bind((ip, port))
-        print("bound")
+        self.client_name = username
+        self.peer_addr = (ip, port)
+        self.peer_name = None
 
-    def connect(self, ip, port):
-        print("connecting")
+    def clean(self):
+        try:
+            self.connector_socket.close()
+        except OSError:
+            pass
+
+    def connection_loop(self, ip, port):
         self.connector_socket.connect((ip, port))
-        print("connected")
+        self.connector_socket.send(self.client_name.encode())
+        self.peer_name = self.connector_socket.recv(1024).decode()
+        print(f"connected to {self.peer_name}")
         while True:
-            print("reading sockets")
             self.readable, self.writable, self.exceptional = select(
                 [self.connector_socket], [self.connector_socket], [])
-            print(self.readable, self.writable)
+            print(self.readable)
             for s in self.readable:
                 data = s.recv(1024)
                 if data:
-                    print(f"recieves from: {s}")
-                    print(data.decode())
+                    print(f"recieve message from: {self.peer_addr}, {data.decode()}")
 
             send_msg = ''.join(random.SystemRandom().choice(string.ascii_uppercase + string.digits) for _ in range(5))
             # send_msg = input().replace('b', '').encode()
 
             for s in self.writable:
-                s.send(send_msg.encode())
-                print(f"msg: {send_msg} send to server {s}")
+                print(s)
+                self.send_msg(s, send_msg)
+                s.close()
                 return True
 
             for s in self.exceptional:
-                self.connector_socket.remove(s)
+                self.exceptional.remove(s)
                 s.close()
 
+    def send_msg(self, socket, message):
+        encoded_msg = message.encode()
+        socket.send(encoded_msg)
+        print(f"msg: {message} send to user {self.connector_socket.getpeername()}")
 
-def setup_client_2(own_ip_port, target_ip_port):
+
+def connect_to_user(own_ip_port, username, target_ip_port):
     own_conn_args = own_ip_port.split(":")
     target_conn_args = target_ip_port.split(":")
-    server_sock = connector(own_conn_args[0], int(own_conn_args[1]))
-    thread = Thread(target=server_sock.connect, args=(target_conn_args[0], int(target_conn_args[1])))
+    client_sock = client(own_conn_args[0], int(own_conn_args[1]), username)
+    # client_sock.clean()
+    thread = Thread(target=client_sock.connection_loop, args=(target_conn_args[0], int(target_conn_args[1])))
     thread.start()
     thread.join()
 
 
-def test_2():
-    thread1 = Thread(target=setup_client_2, args=("127.0.0.1:5555", "127.0.0.1:8888"))
-    thread2 = Thread(target=setup_client_2, args=("127.0.0.1:8888", "127.0.0.1:5555"))
+def make_connections(own_address, username, address_list):
+    threads = []
+    for address in address_list:
+        thread = connect_to_user(own_address, username, address)
+        threads.append(thread)
+
+
+def test():
+    thread0 = Thread(target=make_connections, args=("127.0.0.1:2222", "anon0", ["127.0.0.1:5555", "127.0.0.1:8888"]))
+    thread1 = Thread(target=make_connections, args=("127.0.0.1:5555", "anon1", ["127.0.0.1:2222", "127.0.0.1:8888"]))
+    thread2 = Thread(target=make_connections, args=("127.0.0.1:8888", "anon2", ["127.0.0.1:2222", "127.0.0.1:5555"]))
+    thread0.start()
     thread1.start()
     thread2.start()
+    thread0.join()
     thread1.join()
-    thread2.join()
 
 
-test_2()
+test()
