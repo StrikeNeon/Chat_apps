@@ -17,7 +17,7 @@ class client():
         self.username = username
 
     def greet(self, room):
-        self.client_socket.connect(("127.0.0.1", 6661))
+        self.client_socket.connect(self.room_service)
         greeting = {"username": self.username, "target_room": room}
         self.client_socket.send(json.dumps(greeting).encode("UTF-8"))
         response = self.client_socket.recv(1024)

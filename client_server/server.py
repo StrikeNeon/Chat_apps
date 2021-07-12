@@ -9,18 +9,17 @@ import loguru
 
 
 class room_socket():
-    def __init__(self, collection, port, limit=10):
+    def __init__(self, collection, ip, port, limit=10):
         self.room_logger = loguru.logger
         self.db_collection = collection
         self.room_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.room_host_name = socket.gethostname()
-        self.room_ip = socket.gethostbyname(self.base_host_name)
+        self.room_ip = ip
 
         self.room_port = port
 
-        self.room_socket.bind((self.base_host_name, self.room_port))
+        self.room_socket.bind((self.room_ip, self.room_port))
         self.room_logger.info("Binding successful!")
-        self.room_logger.info(f"Base server bound to: {self.base_ip}:{self.room_port}")
+        self.room_logger.info(f"Base server bound to: {self.room_ip}:{self.room_port}")
 
         self.room_socket.listen(limit)
         self.inputs = [self.room_socket]
@@ -92,7 +91,7 @@ class room_socket():
 
 
 class room_server():
-    def __init__(self, limit=0, port=6661):
+    def __init__(self, ip = None, limit=0, port=6661):
         self.base_logger = loguru.logger
         self.client = MongoClient('127.0.0.1:27017')
 
@@ -100,12 +99,15 @@ class room_server():
         self.collection = self.db['client-server']
 
         self.base_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.base_host_name = socket.gethostname()
-        self.base_ip = socket.gethostbyname(self.base_host_name)
+        if not ip:
+            self.base_host_name = socket.gethostname()
+            self.base_ip = socket.gethostbyname(self.base_host_name)
+        else:
+            self.base_ip = ip
 
         self.base_port = port
 
-        self.base_socket.bind((self.base_host_name, self.base_port))
+        self.base_socket.bind((self.base_ip, self.base_port))
         self.base_logger.info("Binding successful!")
         self.base_logger.info(f"Base server bound to: {self.base_ip}:{self.base_port}")
 
@@ -118,8 +120,8 @@ class room_server():
             try:
                 conn, add = self.base_socket.accept()
 
-                self.base_logger.info(f"Received connection from {add[0]}")
-                self.base_logger.info(f'Connection Established. Connected From: {add[0]}')
+                self.base_logger.info(f"Received connection from {conn.getpeername()}")
+                self.base_logger.info(f'Connection Established. Connected From: {conn.getpeername()}')
                 greeting_data = json.loads((conn.recv(1024)).decode("UTF-8"))
                 if not greeting_data.get('username') or not greeting_data.get("target_room"):
                     error_response = json.dumps(({"status":"error", "message": "data malformed"}))
@@ -133,24 +135,27 @@ class room_server():
                     error_response = json.dumps(({"status":"error", "message": "no"}))
                     conn.send(error_response.encode("UTF-8"))
                     conn.close()
+                    self.base_logger.warning(f"{conn.getpeername()} tried to override base socket")
                 else:
-                    result_of_check = self.base_socket.connect_ex((("127.0.0.1", location)))
-                    if result_of_check == 0:
+                    room_data = self.collection.find_one({"ROOM": location})
+                    self.base_logger.debug(room_data)
+                    if not room_data:
                         room_response = json.dumps(({"status": "warning", "message": "no room found, opening new"}))
                         conn.send(room_response.encode("UTF-8"))
                         self.open_room(location)
                         self.add_room(location)
                         conn.close()
                     else:
-                        room_data = self.collection.find_one({"ROOM": location})
-                        if room_data and self.base_socket.getpeername() not in room_data.get("Blacklist"):
+                        if self.base_socket.getpeername() not in room_data.get("Blacklist"):
                             error_response = json.dumps(({"status": "success", "message": "connection allowed"}))
+                            self.base_logger.info(f"allowed user {greeting_data.get('username')} to connect to room {location}")
                             conn.send(error_response.encode("UTF-8"))
                             conn.close()
                         else:
                             error_response = json.dumps(({"status":"error", "message": "no room found"}))
                             conn.send(error_response.encode("UTF-8"))
                             conn.close()
+                            self.base_logger.warning("user blacklisted")
             except KeyboardInterrupt:
                 try:
                     conn.close()
@@ -162,14 +167,15 @@ class room_server():
 
     def add_room(self, room):
         added_room = self.collection.insert_one({"ROOM": room, "Blacklist": [], "Whitelist": []})
+        self.base_logger.info(f"created room № {room}")
         return added_room
 
     def open_room(self, port):
-        room = room_socket(self.collection, port)
+        room = room_socket(self.collection, self.base_ip, port)
         room_thread = Thread(target=room.room_loop, args=())
         room_thread.start()
         room_thread.join()
 
 
-server = room_server()
+server = room_server(ip = "127.0.0.1")
 server.room_service()
