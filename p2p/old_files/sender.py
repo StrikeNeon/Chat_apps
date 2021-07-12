@@ -9,6 +9,7 @@ from logging.handlers import TimedRotatingFileHandler
 import threading
 import select
 
+
 def configure_logger():
     logger = logging.getLogger(__name__)
     logging.basicConfig(format='%(asctime)s - %(levelname)s - %(name)s - %(message)s', encoding='utf-8', level=logging.DEBUG)
