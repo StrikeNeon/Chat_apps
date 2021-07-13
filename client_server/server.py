@@ -7,6 +7,7 @@ import json
 from pymongo import MongoClient
 import loguru
 import schedule
+from time import sleep
 
 
 class room_socket():
@@ -115,6 +116,7 @@ class room_socket():
 
                 # Remove message queue
                 del self.message_queues[s.getpeername()]
+            sleep(1)
         self.remove_room(self.room_port)
         self.room_socket.close()
         self.room_logger.info(f"room {self.room_port} closed")

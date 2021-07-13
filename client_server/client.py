@@ -4,6 +4,7 @@ import sys
 import select
 import json
 import loguru
+from time import sleep
 
 
 logger = loguru.logger
@@ -52,16 +53,16 @@ class client():
         logger.info("connection closed")
 
     def send_loop(self):
-        while len(self.test_queue) > 0:
+        while self.connected:
             message = self.test_queue.pop()
             logger.debug(message)
             if message == "QUIT":
                 structured_message = {"OPS": "QUIT"}
                 self.client_socket.send(json.dumps(structured_message).encode("UTF-8"))
                 self.connected = False
-                return
             structured_message = {"OPS": "MESSAGE", "at_user": "all", "from_user": (self.ip, self.port), "message": message}
             self.client_socket.send(json.dumps(structured_message).encode("UTF-8"))
+            sleep(1)
 
     def recieve_loop(self):
         while self.connected:
@@ -72,6 +73,7 @@ class client():
                 print(f"message from: {decoded_message.get('from_user')}| {decoded_message.get('message')}")
             except json.decoder.JSONDecodeError:
                 logger.info("malformed message")
+            sleep(1)
 
     def experimental_loop(self):
         self.client_socket = self.make_socket()
