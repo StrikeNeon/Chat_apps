@@ -6,6 +6,7 @@ import queue
 import json
 from pymongo import MongoClient
 import loguru
+import schedule
 
 
 class room_socket():
@@ -26,10 +27,22 @@ class room_socket():
         self.outputs = []
         self.message_queues = {}
         self.room_logger.info(f"Base server limit set at {limit}")
-        self.message_queues["all"] = queue.queue()
+        self.message_queues["all"] = queue.Queue()
+
+    def log_online_users(self):
+        self.room_logger.info(f"users online: {len(self.inputs)}|  {self.inputs}")
+
+    def cleanup(self):
+        if len(self.inputs) == 1:
+            self.room_logger.info("room empty, unmaking")
+            self.room_socket.close()
+            self.inputs.pop[0]
 
     def room_loop(self):
+        schedule.every(10).minutes.do(self.log_online_users)
+        schedule.every(10).minutes.do(self.cleanup)
         while self.inputs:
+            schedule.run_pending()
             readable, writable, exceptional = select.select(self.inputs, self.outputs, self.inputs)
             # Handle inputs
             for s in readable:
@@ -39,39 +52,53 @@ class room_socket():
                     connection, client_address = s.accept()
                     connection.setblocking(0)
                     self.inputs.append(connection)
+                    self.room_logger.info(f"new connection {connection.getpeername()}")
 
                     # Give the connection a queue for data we want to send
-                    self.message_queues[connection.getpeername()] = queue.queue()
+                    self.message_queues[connection.getpeername()] = queue.Queue()
                 else:
-                    data = s.recv(1024)
+                    try:
+                        data = s.recv(5120)
+                    except ConnectionResetError:
+                        data = None
                     if data:
-                        decoded_data = json.loads(data.decode("UTF-8"))
-                        operation = decoded_data.get("OPS", None)
-                        if not operation:
-                            error_response = json.dumps(({"error": "no operation specified"}))
-                            self.message_queues[s.getpeername()].put(error_response.encode("UTF-8"))
-                            continue
-                        if operation == "QUIT":
-                            del self.message_queues[s.getpeername()]
-                            s.close()
-                        elif operation == "MESSAGE":
-                            at_user = decoded_data.get("at_user", None)
-                            if not at_user:
-                                error_response = json.dumps(({"error": "sent to noone"}))
+                        try:
+                            decoded_data = json.loads(data.decode("UTF-8"))
+                            self.room_logger.info(f"recieved message from {s.getpeername()}, {decoded_data}")
+                            operation = decoded_data.get("OPS", None)
+                            if not operation:
+                                error_response = json.dumps(({"error": "no operation specified"}))
                                 self.message_queues[s.getpeername()].put(error_response.encode("UTF-8"))
                                 continue
-                            # A readable client socket has data
-                            self.message_queues[at_user].put(decoded_data)
-                            # Add output channel for response
-                            if s not in self.outputs:
-                                self.outputs.append(s)
+                            if operation == "QUIT":
+                                del self.message_queues[s.getpeername()]
+                                s.close()
+                                self.inputs.remove(s)
+                            elif operation == "MESSAGE":
+                                at_user = decoded_data.get("at_user", None)
+                                if not at_user:
+                                    error_response = json.dumps(({"error": "sent to noone"}))
+                                    self.message_queues[s.getpeername()].put(error_response.encode("UTF-8"))
+                                    continue
+                                # A readable client socket has data
+                                self.message_queues[at_user].put(decoded_data)
+                                self.room_logger.debug(f"queue for {at_user} {self.message_queues[at_user].queue}")
+                                # Add output channel for response
+                                if s not in self.outputs:
+                                    self.outputs.append(s)
+                        except json.decoder.JSONDecodeError:
+                            self.room_logger.info(f"malformed message recieved from {connection.getpeername()}")
                     else:
                         pass
             # Handle outputs
             for s in writable:
                 try:
                     next_msg = self.message_queues[s.getpeername()].get_nowait()
+                    self.room_logger.info(f"sending message to {s.getpeername()}, {next_msg}")
                 except queue.Empty:
+                    # No messages waiting so stop checking for writability.
+                    self.outputs.remove(s)
+                except OSError:
                     # No messages waiting so stop checking for writability.
                     self.outputs.remove(s)
                 else:
@@ -88,10 +115,13 @@ class room_socket():
 
                 # Remove message queue
                 del self.message_queues[s.getpeername()]
+        self.remove_room(self.room_port)
+        self.room_socket.close()
+        self.room_logger.info(f"room {self.room_port} closed")
 
 
 class room_server():
-    def __init__(self, ip = None, limit=0, port=6661):
+    def __init__(self, ip=None, limit=1, port=6661):
         self.base_logger = loguru.logger
         self.client = MongoClient('127.0.0.1:27017')
 
@@ -143,11 +173,16 @@ class room_server():
                         room_response = json.dumps(({"status": "warning", "message": "no room found, opening new"}))
                         conn.send(room_response.encode("UTF-8"))
                         self.open_room(location)
-                        self.add_room(location)
                         conn.close()
                     else:
-                        if self.base_socket.getpeername() not in room_data.get("Blacklist"):
+                        if conn.getpeername() not in room_data.get("Blacklist"):
                             error_response = json.dumps(({"status": "success", "message": "connection allowed"}))
+                            result_of_check = self.base_socket.connect_ex((self.base_ip, location))
+                            if result_of_check == 0: # port open
+                                self.base_logger.info(f"allowed user {greeting_data.get('username')} to connect to room {location}")
+                            else:
+                                self.base_logger.info(f"recreated room {location}")
+                                self.open_room(location)
                             self.base_logger.info(f"allowed user {greeting_data.get('username')} to connect to room {location}")
                             conn.send(error_response.encode("UTF-8"))
                             conn.close()
@@ -167,15 +202,28 @@ class room_server():
 
     def add_room(self, room):
         added_room = self.collection.insert_one({"ROOM": room, "Blacklist": [], "Whitelist": []})
-        self.base_logger.info(f"created room № {room}")
+        self.base_logger.info(f"created room records, room № {room}")
+        return added_room
+
+    def remove_room(self, room):
+        added_room = self.collection.delete_one({"ROOM": room})
+        self.base_logger.info(f"deleted records, room № {room}")
         return added_room
 
     def open_room(self, port):
         room = room_socket(self.collection, self.base_ip, port)
         room_thread = Thread(target=room.room_loop, args=())
         room_thread.start()
+        if not self.collection.find({"ROOM":port}):
+            self.add_room(port)
         room_thread.join()
+        self.remove_room(port)
+
+    def shutdown(self):
+        self.base_socket.close()
 
 
-server = room_server(ip = "127.0.0.1")
-server.room_service()
+server = room_server(ip="127.0.0.1")
+room_thread = Thread(target=server.room_service, args=())
+room_thread.start()
+room_thread.join()
