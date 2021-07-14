@@ -37,10 +37,37 @@ class room_socket():
         if len(self.inputs) == 1:
             self.room_logger.info("room empty, unmaking")
             self.room_socket.close()
-            self.inputs.pop[0]
+            self.inputs.pop(self.room_socket)
+
+    def presence(self):
+        timeout = 5
+        closing = []
+        for check_socket in self.inputs:
+            if check_socket is not self.room_socket:
+                presence_message = {"OPS": "presence"}
+                try:
+                    check_socket.send(json.dumps(presence_message).encode("UTF-8"))
+                    data = check_socket.recv(1024)
+                except ConnectionError:
+                    closing.append(check_socket)
+                    continue
+                while not data:
+                    if timeout == 0:
+                        closing.append(check_socket)
+                    sleep(1)
+                    timeout -= 1
+                decoded_data = json.loads(data.decode("UTF-8"))
+                if decoded_data.get("response", None) == "here":
+                    continue
+                else:
+                    closing.append(check_socket)
+        for closing_socket in closing:
+            self.inputs.remove(closing_socket)
+    # TODO add presence check
 
     def room_loop(self):
         schedule.every(10).minutes.do(self.log_online_users)
+        schedule.every(10).minutes.do(self.presence)
         schedule.every(10).minutes.do(self.cleanup)
         while self.inputs:
             schedule.run_pending()
@@ -69,7 +96,7 @@ class room_socket():
                             operation = decoded_data.get("OPS", None)
                             if not operation:
                                 error_response = json.dumps(({"error": "no operation specified"}))
-                                self.message_queues[s.getpeername()].put(error_response.encode("UTF-8"))
+                                s.send(error_response.encode("UTF-8"))
                                 continue
                             if operation == "QUIT":
                                 del self.message_queues[s.getpeername()]
@@ -79,7 +106,7 @@ class room_socket():
                                 at_user = decoded_data.get("at_user", None)
                                 if not at_user:
                                     error_response = json.dumps(({"error": "sent to noone"}))
-                                    self.message_queues[s.getpeername()].put(error_response.encode("UTF-8"))
+                                    s.send(error_response.encode("UTF-8"))
                                     continue
                                 # A readable client socket has data
                                 self.message_queues[at_user].put(decoded_data)
@@ -89,6 +116,8 @@ class room_socket():
                                     self.outputs.append(s)
                         except json.decoder.JSONDecodeError:
                             self.room_logger.info(f"malformed message recieved from {connection.getpeername()}")
+                            error_response = json.dumps(({"error": "malformed"}))
+                            s.send(error_response.encode("UTF-8"))
                     else:
                         pass
             # Handle outputs
@@ -96,6 +125,7 @@ class room_socket():
                 try:
                     next_msg = self.message_queues[s.getpeername()].get_nowait()
                     self.room_logger.info(f"sending message to {s.getpeername()}, {next_msg}")
+                    self.room_logger.debug(f"peer: {s.getpeername()}| from_user: {next_msg.get('from_user')}| at_user: {next_msg.get('at_user')}")
                 except queue.Empty:
                     # No messages waiting so stop checking for writability.
                     self.outputs.remove(s)
@@ -117,13 +147,10 @@ class room_socket():
                 # Remove message queue
                 del self.message_queues[s.getpeername()]
             sleep(1)
-        self.remove_room(self.room_port)
-        self.room_socket.close()
-        self.room_logger.info(f"room {self.room_port} closed")
 
 
 class room_server():
-    def __init__(self, ip=None, limit=1, port=6661):
+    def __init__(self, ip=None, limit=10, port=6661):
         self.base_logger = loguru.logger
         self.client = MongoClient('127.0.0.1:27017')
 
@@ -145,6 +172,7 @@ class room_server():
 
         self.base_socket.listen(limit)
         self.base_logger.info(f"Base server limit set at {limit}")
+        self.rooms = []
 
     def room_service(self):
         self.base_logger.debug("main loop started")
@@ -174,7 +202,9 @@ class room_server():
                     if not room_data:
                         room_response = json.dumps(({"status": "warning", "message": "no room found, opening new"}))
                         conn.send(room_response.encode("UTF-8"))
-                        self.open_room(location)
+                        room_thread = Thread(target=self.open_room, args=([location]))
+                        room_thread.start()
+                        self.rooms.append(room_thread)
                         conn.close()
                     else:
                         if conn.getpeername() not in room_data.get("Blacklist"):
@@ -201,6 +231,8 @@ class room_server():
                 except UnboundLocalError:
                     self.base_socket.close()
                     return
+        for room in self.rooms:  # server closed, close all rooms
+            room.join()
 
     def add_room(self, room):
         added_room = self.collection.insert_one({"ROOM": room, "Blacklist": [], "Whitelist": []})
@@ -213,13 +245,17 @@ class room_server():
         return added_room
 
     def open_room(self, port):
-        room = room_socket(self.collection, self.base_ip, port)
-        room_thread = Thread(target=room.room_loop, args=())
-        room_thread.start()
-        if not self.collection.find({"ROOM":port}):
-            self.add_room(port)
-        room_thread.join()
-        self.remove_room(port)
+        try:
+            room = room_socket(self.collection, self.base_ip, port)
+            if not self.collection.find({"ROOM":port}):
+                self.add_room(port)
+            room.room_loop()
+            self.remove_room(port)
+            room.close()
+            self.base_logger.info(f"room {port} closed")
+            self.remove_room(port)
+        except:
+            return
 
     def shutdown(self):
         self.base_socket.close()

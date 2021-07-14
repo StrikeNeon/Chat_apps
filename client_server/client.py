@@ -70,50 +70,17 @@ class client():
                 message = self.client_socket.recv(5120)
                 logger.debug(message.decode("UTF-8"))
                 decoded_message = json.loads(message.decode("UTF-8"))
+                if decoded_message.get("OPS", None) == "presence":
+                    structured_message = {"OPS": "MESSAGE", "response": "here"}
+                    self.client_socket.send(json.dumps(structured_message).encode("UTF-8"))
                 print(f"message from: {decoded_message.get('from_user')}| {decoded_message.get('message')}")
             except json.decoder.JSONDecodeError:
                 logger.info("malformed message")
             sleep(1)
 
-    def experimental_loop(self):
-        self.client_socket = self.make_socket()
-        self.client_socket.connect((self.room_service[0], room_no))
-        self.to_send = None
-        while True:
-            try:
-                ready_to_read, ready_to_write, in_error = \
-                    select.select([self.client_socket, ], [self.client_socket, ], [], 5)
-            except select.error:
-                self.client_socket.shutdown(2)    # 0 = done receiving, 1 = done sending, 2 = both
-                self.client_socket.close()
-                # connection error event here, maybe reconnect
-                print('connection error')
-                break
-            if len(ready_to_read) > 0:
-                recv = self.client_socket.recv(2048)
-                # do stuff with received data
-                print(f'received: {recv}')
-            if len(ready_to_write) > 0:
-                if self.to_send:
-                    # connection established, send some stuff
-                    self.client_socket.send('some stuff')
-
-    def experimental_send_loop(self):
-        while True:
-            message = self.test_queue.pop()
-            logger.debug(message)
-            if message == "QUIT":
-                structured_message = {"OPS": "QUIT"}
-                self.client_socket.send(json.dumps(structured_message).encode("UTF-8"))
-                self.connected = False
-                self.client_socket.close()
-                return
-            structured_message = {"OPS": "MESSAGE", "at_user": "all", "from_user": (self.ip, self.port), "message": message}
-            self.client_socket.send(json.dumps(structured_message).encode("UTF-8"))
-
 
 # client_port = input("input port: ")
-client_port = 9992
+client_port = 9993
 client = client("localhost", int(client_port), "anon")
 # room_no = input("connect to room: ")
 room_no = 1234
