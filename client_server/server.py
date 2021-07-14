@@ -31,13 +31,13 @@ class room_socket():
         self.message_queues["all"] = queue.Queue()
 
     def log_online_users(self):
-        self.room_logger.info(f"users online: {len(self.inputs)}|  {self.inputs}")
+        self.room_logger.info(f"users online: {len(self.inputs)-1}|  {self.inputs[1:]}")
 
     def cleanup(self):
         if len(self.inputs) == 1:
             self.room_logger.info("room empty, unmaking")
-            self.room_socket.close()
             self.inputs.pop(self.room_socket)
+            return
 
     def presence(self):
         timeout = 5
@@ -68,7 +68,7 @@ class room_socket():
     def room_loop(self):
         schedule.every(10).minutes.do(self.log_online_users)
         schedule.every(10).minutes.do(self.presence)
-        schedule.every(10).minutes.do(self.cleanup)
+        schedule.every(1).minutes.do(self.cleanup)
         while self.inputs:
             schedule.run_pending()
             readable, writable, exceptional = select.select(self.inputs, self.outputs, self.inputs)
@@ -86,7 +86,7 @@ class room_socket():
                     self.message_queues[connection.getpeername()] = queue.Queue()
                 else:
                     try:
-                        data = s.recv(5120)
+                        data = s.recv(1024)
                     except ConnectionResetError:
                         data = None
                     if data:
@@ -99,18 +99,24 @@ class room_socket():
                                 s.send(error_response.encode("UTF-8"))
                                 continue
                             if operation == "QUIT":
+                                self.room_logger.info(f"user {s.getpeername()} quit")
                                 del self.message_queues[s.getpeername()]
-                                s.close()
                                 self.inputs.remove(s)
+                                s.close()
+                                continue
                             elif operation == "MESSAGE":
                                 at_user = decoded_data.get("at_user", None)
                                 if not at_user:
                                     error_response = json.dumps(({"error": "sent to noone"}))
                                     s.send(error_response.encode("UTF-8"))
                                     continue
-                                # A readable client socket has data
-                                self.message_queues[at_user].put(decoded_data)
-                                self.room_logger.debug(f"queue for {at_user} {self.message_queues[at_user].queue}")
+                                if at_user == "all":
+                                    for user in self.message_queues.keys():
+                                        self.message_queues[user].put(decoded_data)
+                                else:
+                                    # A readable client socket has data
+                                    self.message_queues[at_user].put(decoded_data)
+                                    self.room_logger.debug(f"queue for {at_user} {self.message_queues[at_user].queue}")
                                 # Add output channel for response
                                 if s not in self.outputs:
                                     self.outputs.append(s)
@@ -122,19 +128,20 @@ class room_socket():
                         pass
             # Handle outputs
             for s in writable:
+                self.room_logger.debug(f"sending message to {s.getpeername()}")
                 try:
+                    self.room_logger.debug(f"reading message from queue")
                     next_msg = self.message_queues[s.getpeername()].get_nowait()
                     self.room_logger.info(f"sending message to {s.getpeername()}, {next_msg}")
                     self.room_logger.debug(f"peer: {s.getpeername()}| from_user: {next_msg.get('from_user')}| at_user: {next_msg.get('at_user')}")
+                    if s.getpeername() == next_msg.get("at_user") or next_msg.get("at_user") == "all":
+                        s.send(json.dumps(next_msg).encode("UTF-8"))
                 except queue.Empty:
                     # No messages waiting so stop checking for writability.
                     self.outputs.remove(s)
                 except OSError:
                     # No messages waiting so stop checking for writability.
                     self.outputs.remove(s)
-                else:
-                    if s.getpeername() == next_msg.get("at_user") or next_msg.get("at_user") == "all":
-                        s.send(json.dumps(next_msg).encode("UTF-8"))
 
             # Handle "exceptional conditions"
             for s in exceptional:
@@ -147,6 +154,7 @@ class room_socket():
                 # Remove message queue
                 del self.message_queues[s.getpeername()]
             sleep(1)
+        self.room_logger.info(f"room {self.room_port} closing")
 
 
 class room_server():
@@ -204,13 +212,13 @@ class room_server():
                         conn.send(room_response.encode("UTF-8"))
                         room_thread = Thread(target=self.open_room, args=([location]))
                         room_thread.start()
-                        self.rooms.append(room_thread)
+                        self.rooms.append((room_thread, location))
                         conn.close()
                     else:
                         if conn.getpeername() not in room_data.get("Blacklist"):
                             error_response = json.dumps(({"status": "success", "message": "connection allowed"}))
                             result_of_check = self.base_socket.connect_ex((self.base_ip, location))
-                            if result_of_check == 0: # port open
+                            if result_of_check == 0:  # port open
                                 self.base_logger.info(f"allowed user {greeting_data.get('username')} to connect to room {location}")
                             else:
                                 self.base_logger.info(f"recreated room {location}")
@@ -223,6 +231,7 @@ class room_server():
                             conn.send(error_response.encode("UTF-8"))
                             conn.close()
                             self.base_logger.warning("user blacklisted")
+
             except KeyboardInterrupt:
                 try:
                     conn.close()

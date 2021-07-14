@@ -32,7 +32,7 @@ class client():
         greeting = {"username": self.username, "target_room": room}
         self.client_socket.send(json.dumps(greeting).encode("UTF-8"))
         logger.debug("greeting sent")
-        response = self.client_socket.recv(2048)
+        response = self.client_socket.recv(1024)
         decoded_response = json.loads(response.decode("UTF-8"))
         logger.debug("response recieved, closing")
         self.client_socket.close()
@@ -49,25 +49,24 @@ class client():
         output_thread.start()
         input_thread.join()
         output_thread.join()
-        self.client_socket.close()
-        logger.info("connection closed")
 
     def send_loop(self):
         while self.connected:
-            message = self.test_queue.pop()
-            logger.debug(message)
+            message = input("MGS: ")
             if message == "QUIT":
                 structured_message = {"OPS": "QUIT"}
                 self.client_socket.send(json.dumps(structured_message).encode("UTF-8"))
                 self.connected = False
-            structured_message = {"OPS": "MESSAGE", "at_user": "all", "from_user": (self.ip, self.port), "message": message}
-            self.client_socket.send(json.dumps(structured_message).encode("UTF-8"))
-            sleep(1)
+                self.client_socket.close()
+            else:
+                structured_message = {"OPS": "MESSAGE", "at_user": "all", "from_user": (self.ip, self.port), "message": message}
+                self.client_socket.send(json.dumps(structured_message).encode("UTF-8"))
+                sleep(1)
 
     def recieve_loop(self):
         while self.connected:
             try:
-                message = self.client_socket.recv(5120)
+                message = self.client_socket.recv(1024)
                 logger.debug(message.decode("UTF-8"))
                 decoded_message = json.loads(message.decode("UTF-8"))
                 if decoded_message.get("OPS", None) == "presence":
@@ -76,11 +75,13 @@ class client():
                 print(f"message from: {decoded_message.get('from_user')}| {decoded_message.get('message')}")
             except json.decoder.JSONDecodeError:
                 logger.info("malformed message")
+            except ConnectionAbortedError:
+                logger.info("connection closed")
             sleep(1)
 
 
 # client_port = input("input port: ")
-client_port = 9993
+client_port = 9995
 client = client("localhost", int(client_port), "anon")
 # room_no = input("connect to room: ")
 room_no = 1234
