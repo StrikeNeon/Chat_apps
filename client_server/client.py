@@ -61,13 +61,12 @@ class client():
             else:
                 structured_message = {"OPS": "MESSAGE", "at_user": "all", "from_user": (self.ip, self.port), "message": message}
                 self.client_socket.send(json.dumps(structured_message).encode("UTF-8"))
-                sleep(1)
 
     def recieve_loop(self):
         while self.connected:
             try:
                 message = self.client_socket.recv(1024)
-                logger.debug(message.decode("UTF-8"))
+                # logger.debug(message.decode("UTF-8"))
                 decoded_message = json.loads(message.decode("UTF-8"))
                 if decoded_message.get("OPS", None) == "presence":
                     structured_message = {"OPS": "MESSAGE", "response": "here"}
@@ -77,11 +76,11 @@ class client():
                 logger.info("malformed message")
             except ConnectionAbortedError:
                 logger.info("connection closed")
-            sleep(1)
+            sleep(0.2)
 
 
 # client_port = input("input port: ")
-client_port = 9995
+client_port = 9992
 client = client("localhost", int(client_port), "anon")
 # room_no = input("connect to room: ")
 room_no = 1234
