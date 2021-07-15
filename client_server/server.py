@@ -69,6 +69,9 @@ class room_socket():
         for closing_socket in closing:
             self.inputs.remove(closing_socket)
 
+    def add_user(self):
+        pass
+
     def send_data(self, s):
         self.room_logger.debug(f"sending message to {s.getpeername()}")
         try:
@@ -275,7 +278,7 @@ class room_server():
     def open_room(self, port):
         try:
             room = room_socket(self.collection, self.base_ip, port)
-            if not self.collection.find({"ROOM": port}):
+            if not self.collection.find_one({"ROOM": port}):
                 self.base_logger.debug("creating_room")
                 self.add_room(port)
             room.room_loop()
