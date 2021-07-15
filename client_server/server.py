@@ -30,11 +30,15 @@ class room_socket():
         self.room_logger.info(f"Base server limit set at {limit}")
         self.message_queues["all"] = queue.Queue()
 
+    def close(self):
+        self.room_socket.close()
+
     def log_online_users(self):
         self.room_logger.info(f"users online: {len(self.inputs)-1}|  {self.inputs[1:]}")
 
     def cleanup(self):
-        if len(self.inputs) == 0:
+        self.room_logger.debug("checking activity")
+        if len(self.inputs) == 1:
             self.room_logger.info("room empty, unmaking")
             self.inputs.pop(self.room_socket)
             return
@@ -42,6 +46,7 @@ class room_socket():
     def presence(self):
         timeout = 5
         closing = []
+        self.room_logger.debug("sending presences")
         for check_socket in self.inputs:
             if check_socket is not self.room_socket:
                 presence_message = {"OPS": "presence"}
@@ -63,85 +68,96 @@ class room_socket():
                     closing.append(check_socket)
         for closing_socket in closing:
             self.inputs.remove(closing_socket)
-    # TODO add presence check
+
+    def send_data(self, s):
+        self.room_logger.debug(f"sending message to {s.getpeername()}")
+        try:
+            next_msg = self.message_queues[s.getpeername()].get_nowait()
+            if next_msg.get("at_user") == "all":
+                next_msg = self.message_queues["all"].get_nowait()
+                for connection in self.inputs:
+                    if connection != self.room_socket:
+                        self.room_logger.debug(f"sent to {s}")
+                        connection.send(json.dumps(next_msg).encode("UTF-8"))
+            else:
+                for connection in self.inputs:
+                    if connection != self.room_socket:
+                        if connection.getpeername() == next_msg.get("at_user"):
+                            self.room_logger.debug(f"sent to {s}")
+                            connection.send(json.dumps(next_msg).encode("UTF-8"))
+        except queue.Empty:
+            # No messages waiting so stop checking for writability.
+            self.room_logger.warning(f"socket {s.getpeername()} queue empty")
+            self.outputs.remove(s)
+        except OSError:
+            # No messages waiting so stop checking for writability.
+            self.room_logger.warning(f"socket {s.getpeername()} probably disconnected")
+            self.outputs.remove(s)
+
+    def recieve_data(self, s):
+        if s is self.room_socket:
+            # A "readable" server socket is ready to accept a connection
+            connection, client_address = s.accept()
+            connection.setblocking(0)
+            self.inputs.append(connection)
+            self.room_logger.info(f"new connection {connection.getpeername()}")
+
+            # Give the connection a queue for data we want to send
+            self.message_queues[connection.getpeername()] = queue.Queue()
+        else:
+            try:
+                data = s.recv(1024)
+            except ConnectionResetError:
+                self.room_logger.info(f"user {s.getpeername()} quit")
+                del self.message_queues[s.getpeername()]
+                self.inputs.remove(s)
+                self.room_logger.debug(f"user {s.getpeername()} queue deleted")
+                self.room_logger.debug(f"socket {s.getpeername()} closed")
+            try:
+                decoded_data = json.loads(data.decode("UTF-8"))
+                self.room_logger.info(f"recieved message from {s.getpeername()}, {decoded_data}")
+                operation = decoded_data.get("OPS", None)
+                if not operation:
+                    error_response = json.dumps(({"error": "no operation specified"}))
+                    s.send(error_response.encode("UTF-8"))
+                if operation == "QUIT":
+                    self.room_logger.info(f"user {s.getpeername()} quit")
+                elif operation == "MESSAGE":
+                    at_user = decoded_data.get("at_user", None)
+                    if not at_user:
+                        error_response = json.dumps(({"error": "sent to noone"}))
+                        s.send(error_response.encode("UTF-8"))
+                    if at_user == "all":
+                        for user in self.message_queues.keys():
+                            self.message_queues["all"].put(decoded_data)
+                            self.room_logger.debug(f"queue for {at_user} {self.message_queues[user].queue}")
+                    else:
+                        # A readable client socket has data
+                        self.message_queues[at_user].put(decoded_data)
+                    # Add output channel for response
+                    if s not in self.outputs:
+                        self.outputs.append(s)
+            except json.decoder.JSONDecodeError:
+                self.room_logger.info(f"malformed message recieved from {connection.getpeername()}")
+                error_response = json.dumps(({"error": "malformed"}))
+                s.send(error_response.encode("UTF-8"))
+            except UnboundLocalError:
+                pass
 
     def room_loop(self):
         schedule.every(5).minutes.do(self.log_online_users)
         schedule.every(5).minutes.do(self.presence)
-        schedule.every(1).minutes.do(self.cleanup)
+        schedule.every(5).minutes.do(self.cleanup)
         while self.inputs:
             schedule.run_pending()
             readable, writable, exceptional = select.select(self.inputs, self.outputs, self.inputs)
             # Handle inputs
             for s in readable:
-
-                if s is self.room_socket:
-                    # A "readable" server socket is ready to accept a connection
-                    connection, client_address = s.accept()
-                    connection.setblocking(0)
-                    self.inputs.append(connection)
-                    self.room_logger.info(f"new connection {connection.getpeername()}")
-
-                    # Give the connection a queue for data we want to send
-                    self.message_queues[connection.getpeername()] = queue.Queue()
-                else:
-                    try:
-                        data = s.recv(1024)
-                    except ConnectionResetError:
-                        self.room_logger.info(f"user {s.getpeername()} quit")
-                        del self.message_queues[s.getpeername()]
-                        self.inputs.remove(s)
-                        self.room_logger.debug(f"user {s.getpeername()} queue deleted")
-                        self.room_logger.debug(f"socket {s.getpeername()} closed")
-                        continue
-                    try:
-                        decoded_data = json.loads(data.decode("UTF-8"))
-                        self.room_logger.info(f"recieved message from {s.getpeername()}, {decoded_data}")
-                        operation = decoded_data.get("OPS", None)
-                        if not operation:
-                            error_response = json.dumps(({"error": "no operation specified"}))
-                            s.send(error_response.encode("UTF-8"))
-                            continue
-                        if operation == "QUIT":
-                            self.room_logger.info(f"user {s.getpeername()} quit")
-                            continue
-                        elif operation == "MESSAGE":
-                            at_user = decoded_data.get("at_user", None)
-                            if not at_user:
-                                error_response = json.dumps(({"error": "sent to noone"}))
-                                s.send(error_response.encode("UTF-8"))
-                                continue
-                            if at_user == "all":
-                                for user in self.message_queues.keys():
-                                    self.message_queues[user].put(decoded_data)
-                            else:
-                                # A readable client socket has data
-                                self.message_queues[at_user].put(decoded_data)
-                                self.room_logger.debug(f"queue for {at_user} {self.message_queues[at_user].queue}")
-                            # Add output channel for response
-                            if s not in self.outputs:
-                                self.outputs.append(s)
-                    except json.decoder.JSONDecodeError:
-                        self.room_logger.info(f"malformed message recieved from {connection.getpeername()}")
-                        error_response = json.dumps(({"error": "malformed"}))
-                        s.send(error_response.encode("UTF-8"))
-
+                self.recieve_data(s)
+            # TODO figure out that weird queue block error
             # Handle outputs
             for s in writable:
-                self.room_logger.debug(f"sending message to {s.getpeername()}")
-                try:
-                    self.room_logger.debug(f"reading message from queue")
-                    next_msg = self.message_queues[s.getpeername()].get_nowait()
-                    self.room_logger.info(f"sending message to {s.getpeername()}, {next_msg}")
-                    self.room_logger.debug(f"peer: {s.getpeername()}| from_user: {next_msg.get('from_user')}| at_user: {next_msg.get('at_user')}")
-                    if s.getpeername() == next_msg.get("at_user") or next_msg.get("at_user") == "all":
-                        s.send(json.dumps(next_msg).encode("UTF-8"))
-                except queue.Empty:
-                    # No messages waiting so stop checking for writability.
-                    self.outputs.remove(s)
-                except OSError:
-                    # No messages waiting so stop checking for writability.
-                    self.outputs.remove(s)
+                self.send_data(s)
 
             # Handle "exceptional conditions"
             for s in exceptional:
@@ -205,9 +221,10 @@ class room_server():
                     conn.close()
                     self.base_logger.warning(f"{conn.getpeername()} tried to override base socket")
                 else:
-                    room_data = self.collection.find_one(filter={"ROOM": location})
+                    room_data = self.collection.find_one({"ROOM": location})
                     self.base_logger.debug(f"queried data for {location}| {room_data}")
                     if not room_data:
+                        self.base_logger.debug("no room found, creating")
                         room_response = json.dumps(({"status": "warning", "message": "no room found, opening new"}))
                         conn.send(room_response.encode("UTF-8"))
                         room_thread = Thread(target=self.open_room, args=([location]))
@@ -222,7 +239,9 @@ class room_server():
                                 self.base_logger.info(f"allowed user {greeting_data.get('username')} to connect to room {location}")
                             else:
                                 self.base_logger.info(f"recreated room {location}")
-                                self.open_room(location)
+                                room_thread = Thread(target=self.open_room, args=([location]))
+                                room_thread.start()
+                                self.rooms.append((room_thread, location))
                             self.base_logger.info(f"allowed user {greeting_data.get('username')} to connect to room {location}")
                             conn.send(error_response.encode("UTF-8"))
                             conn.close()
@@ -244,27 +263,27 @@ class room_server():
             room.join()
 
     def add_room(self, room):
-        added_room = self.collection.insert_one({"ROOM": room, "Blacklist": [], "Whitelist": []})
+        added_room = self.collection.insert_one({"ROOM": room, "Blacklist": [], "Whitelist": [], "Users": []}).inserted_id
         self.base_logger.info(f"created room records, room № {room}")
         return added_room
 
     def remove_room(self, room):
-        added_room = self.collection.delete_one({"ROOM": room})
+        self.collection.delete_one({"ROOM": room})
         self.base_logger.info(f"deleted records, room № {room}")
-        return added_room
+        return
 
     def open_room(self, port):
         try:
             room = room_socket(self.collection, self.base_ip, port)
-            if not self.collection.find({"ROOM":port}):
+            if not self.collection.find({"ROOM": port}):
+                self.base_logger.debug("creating_room")
                 self.add_room(port)
             room.room_loop()
-            self.remove_room(port)
             room.close()
             self.base_logger.info(f"room {port} closed")
-            self.remove_room(port)
-        except:
-            return
+            # self.remove_room(port)
+        except Exception as ex:
+            self.base_logger.error(ex)
 
     def shutdown(self):
         self.base_socket.close()

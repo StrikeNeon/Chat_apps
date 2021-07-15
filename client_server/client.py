@@ -17,7 +17,6 @@ class client():
         self.port = port
         self.username = username
         self.connected = False
-        self.test_queue = ["QUIT", "test", "anon"]
 
     def make_socket(self):
         client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -41,6 +40,7 @@ class client():
     def main_loop(self, room_no):
         self.client_socket = self.make_socket()
         self.client_socket.connect((self.room_service[0], room_no))
+        # self.client_socket.setblocking(0)
         logger.info("connected")
         self.connected = True
         input_thread = Thread(target=self.send_loop, args=())
@@ -58,6 +58,7 @@ class client():
                 self.client_socket.send(json.dumps(structured_message).encode("UTF-8"))
                 self.connected = False
                 self.client_socket.close()
+                return
             else:
                 structured_message = {"OPS": "MESSAGE", "at_user": "all", "from_user": (self.ip, self.port), "message": message}
                 self.client_socket.send(json.dumps(structured_message).encode("UTF-8"))
@@ -66,16 +67,21 @@ class client():
         while self.connected:
             try:
                 message = self.client_socket.recv(1024)
-                # logger.debug(message.decode("UTF-8"))
+                logger.debug(message.decode("UTF-8"))
                 decoded_message = json.loads(message.decode("UTF-8"))
                 if decoded_message.get("OPS", None) == "presence":
                     structured_message = {"OPS": "MESSAGE", "response": "here"}
                     self.client_socket.send(json.dumps(structured_message).encode("UTF-8"))
                 print(f"message from: {decoded_message.get('from_user')}| {decoded_message.get('message')}")
             except json.decoder.JSONDecodeError:
-                logger.info("malformed message")
+                # logger.error("malformed message, exiting")
+                # logger.debug(message.decode("UTF-8"))
+                # self.connected = False
+                # self.client_socket.close()
+                # return
+                pass
             except ConnectionAbortedError:
-                logger.info("connection closed")
+                logger.warning("connection closed")
             sleep(0.2)
 
 
