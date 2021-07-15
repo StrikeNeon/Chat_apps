@@ -4,7 +4,7 @@ import sys
 import select
 import queue
 import json
-from pymongo import MongoClient
+from pymongo import MongoClient, ReturnDocument
 import loguru
 import schedule
 from time import sleep
@@ -29,6 +29,7 @@ class room_socket():
         self.message_queues = {}
         self.room_logger.info(f"Base server limit set at {limit}")
         self.message_queues["all"] = queue.Queue()
+        self.users = {}
 
     def close(self):
         self.room_socket.close()
@@ -69,8 +70,46 @@ class room_socket():
         for closing_socket in closing:
             self.inputs.remove(closing_socket)
 
-    def add_user(self):
-        pass
+    def add_user(self, user_ip, username):
+        self.users[username] = [user_ip, username]
+        updated = self.db_collection.find_one_and_update({"ROOM": self.room_port}, {'$set': {"USERS": self.users}}, return_document=ReturnDocument.AFTER)
+        return updated
+
+    def remove_user(self, user_ip):
+        to_update = [self.users.pop(user_record[1], None) for user_record in self.users if user_record[0] == user_ip]
+        if len(to_update) >1:
+            updated = self.db_collection.find_one_and_update({"ROOM": self.room_port}, {'$set': {"USERS": self.users}}, return_document=ReturnDocument.AFTER)
+            return updated
+        else:
+            self.room_logger.error(f"a non unique user has entered somehow {user_ip}")
+
+    def room_loop(self):
+        schedule.every(5).minutes.do(self.log_online_users)
+        schedule.every(5).minutes.do(self.presence)
+        schedule.every(5).minutes.do(self.cleanup)
+        while self.inputs:
+            schedule.run_pending()
+            readable, writable, exceptional = select.select(self.inputs, self.outputs, self.inputs)
+            # Handle inputs
+            for s in readable:
+                self.recieve_data(s)
+            # TODO figure out that weird queue block error
+            # Handle outputs
+            for s in writable:
+                self.send_data(s)
+
+            # Handle "exceptional conditions"
+            for s in exceptional:
+                # Stop listening for input on the connection
+                self.inputs.remove(s)
+                if s in self.outputs:
+                    self.outputs.remove(s)
+                s.close()
+
+                # Remove message queue
+                del self.message_queues[s.getpeername()]
+            sleep(0.2)
+        self.room_logger.info(f"room {self.room_port} closing")
 
     def send_data(self, s):
         self.room_logger.debug(f"sending message to {s.getpeername()}")
@@ -102,11 +141,31 @@ class room_socket():
             # A "readable" server socket is ready to accept a connection
             connection, client_address = s.accept()
             connection.setblocking(0)
-            self.inputs.append(connection)
-            self.room_logger.info(f"new connection {connection.getpeername()}")
+            data = connection.recv(1024)
+            decoded_data = json.loads(data.decode("UTF-8"))
+            operation = decoded_data.get("OPS", None)
+            if not operation:
+                error_response = json.dumps(({"error": "no operation specified"}))
+                connection.send(error_response.encode("UTF-8"))
 
-            # Give the connection a queue for data we want to send
-            self.message_queues[connection.getpeername()] = queue.Queue()
+            if operation == "GREETING":
+                username = decoded_data.get("username", None)
+                user_ip = decoded_data.get("user_ip", None)
+                if user_ip != connection.getpeername():
+                    error_response = json.dumps(({"error": ")"}))
+                    connection.send(error_response.encode("UTF-8"))
+                if user_ip and username not in self.users.keys():
+                    self.add_user(user_ip, username)
+                    self.inputs.append(connection)
+                    # Give the connection a queue for data we want to send
+                    self.message_queues[connection.getpeername()] = queue.Queue()
+                    self.room_logger.info(f"new connection {connection.getpeername()}")
+                    error_response = json.dumps(({"success": "user connected"}))
+                    connection.send(error_response.encode("UTF-8"))
+                else:
+                    error_response = json.dumps(({"error": "non unique username"}))
+                    connection.send(error_response.encode("UTF-8"))
+
         else:
             try:
                 data = s.recv(1024)
@@ -114,6 +173,7 @@ class room_socket():
                 self.room_logger.info(f"user {s.getpeername()} quit")
                 del self.message_queues[s.getpeername()]
                 self.inputs.remove(s)
+                self.remove_user(s.getpeername())
                 self.room_logger.debug(f"user {s.getpeername()} queue deleted")
                 self.room_logger.debug(f"socket {s.getpeername()} closed")
             try:
@@ -132,7 +192,7 @@ class room_socket():
                         s.send(error_response.encode("UTF-8"))
                     if at_user == "all":
                         for user in self.message_queues.keys():
-                            self.message_queues["all"].put(decoded_data)
+                            self.message_queues[user].put(decoded_data)
                             self.room_logger.debug(f"queue for {at_user} {self.message_queues[user].queue}")
                     else:
                         # A readable client socket has data
@@ -146,34 +206,6 @@ class room_socket():
                 s.send(error_response.encode("UTF-8"))
             except UnboundLocalError:
                 pass
-
-    def room_loop(self):
-        schedule.every(5).minutes.do(self.log_online_users)
-        schedule.every(5).minutes.do(self.presence)
-        schedule.every(5).minutes.do(self.cleanup)
-        while self.inputs:
-            schedule.run_pending()
-            readable, writable, exceptional = select.select(self.inputs, self.outputs, self.inputs)
-            # Handle inputs
-            for s in readable:
-                self.recieve_data(s)
-            # TODO figure out that weird queue block error
-            # Handle outputs
-            for s in writable:
-                self.send_data(s)
-
-            # Handle "exceptional conditions"
-            for s in exceptional:
-                # Stop listening for input on the connection
-                self.inputs.remove(s)
-                if s in self.outputs:
-                    self.outputs.remove(s)
-                s.close()
-
-                # Remove message queue
-                del self.message_queues[s.getpeername()]
-            sleep(0.2)
-        self.room_logger.info(f"room {self.room_port} closing")
 
 
 class room_server():

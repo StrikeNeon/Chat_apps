@@ -33,22 +33,31 @@ class client():
         logger.debug("greeting sent")
         response = self.client_socket.recv(1024)
         decoded_response = json.loads(response.decode("UTF-8"))
-        logger.debug("response recieved, closing")
+        logger.debug(f"response recieved, closing {decoded_response}")
         self.client_socket.close()
         return decoded_response
 
     def main_loop(self, room_no):
         self.client_socket = self.make_socket()
         self.client_socket.connect((self.room_service[0], room_no))
-        # self.client_socket.setblocking(0)
-        logger.info("connected")
-        self.connected = True
-        input_thread = Thread(target=self.send_loop, args=())
-        output_thread = Thread(target=self.recieve_loop, args=())
-        input_thread.start()
-        output_thread.start()
-        input_thread.join()
-        output_thread.join()
+
+        greeting = {"username": self.username, "user_ip": [self.ip, self.port]}
+        self.client_socket.send(json.dumps(greeting).encode("UTF-8"))
+        logger.debug("greeting sent")
+        response = self.client_socket.recv(1024)
+        decoded_response = json.loads(response.decode("UTF-8"))
+        if decoded_response == {"success": "user connected"}:
+            logger.info("connected")
+
+            self.connected = True
+            input_thread = Thread(target=self.send_loop, args=())
+            output_thread = Thread(target=self.recieve_loop, args=())
+            input_thread.start()
+            output_thread.start()
+            input_thread.join()
+            output_thread.join()
+        else:
+            pass
 
     def send_loop(self):
         while self.connected:
@@ -86,7 +95,7 @@ class client():
 
 
 # client_port = input("input port: ")
-client_port = 9992
+client_port = 9991
 client = client("localhost", int(client_port), "anon")
 # room_no = input("connect to room: ")
 room_no = 1234
