@@ -1,4 +1,4 @@
-from threading import Thread
+from threading import Thread, Event
 import socket
 import sys
 import select
@@ -8,6 +8,31 @@ from pymongo import MongoClient, ReturnDocument
 import loguru
 import schedule
 from time import sleep
+
+
+def run_continuously(interval=1):
+    """Continuously run, while executing pending jobs at each
+    elapsed time interval.
+    @return cease_continuous_run: threading. Event which can
+    be set to cease continuous run. Please note that it is
+    *intended behavior that run_continuously() does not run
+    missed jobs*. For example, if you've registered a job that
+    should run every minute and you set a continuous run
+    interval of one hour then your job won't be run 60 times
+    at each interval but only once.
+    """
+    cease_continuous_run = Event()
+
+    class ScheduleThread(Thread):
+        @classmethod
+        def run(cls):
+            while not cease_continuous_run.is_set():
+                schedule.run_pending()
+                sleep(interval)
+
+    continuous_thread = ScheduleThread()
+    continuous_thread.start()
+    return cease_continuous_run
 
 
 class room_socket():
@@ -35,14 +60,17 @@ class room_socket():
         self.room_socket.close()
 
     def log_online_users(self):
-        self.room_logger.info(f"users online: {len(self.inputs)-1}|  {self.inputs[1:]}")
+        if len(self.inputs()) > 0:
+            self.room_logger.info(f"users online: {len(self.inputs)-1}|  {self.inputs[1:]}")
+        else:
+            self.room_logger.error("Inputs ceased existing, but the loop still runs")
 
     def cleanup(self):
         self.room_logger.debug("checking activity")
         if len(self.inputs) == 1:
             self.room_logger.info("room empty, unmaking")
-            self.inputs.pop(self.room_socket)
-            return
+            self.inputs.pop(0)
+            self.room_logger.info("last socket removed")
 
     def presence(self):
         timeout = 5
@@ -77,18 +105,16 @@ class room_socket():
 
     def remove_user(self, user_ip):
         to_update = [self.users.pop(user_record[1], None) for user_record in self.users if user_record[0] == user_ip]
-        if len(to_update) >1:
-            updated = self.db_collection.find_one_and_update({"ROOM": self.room_port}, {'$set': {"USERS": self.users}}, return_document=ReturnDocument.AFTER)
-            return updated
-        else:
-            self.room_logger.error(f"a non unique user has entered somehow {user_ip}")
+        self.room_logger.debug(f"{to_update}")
+        updated = self.db_collection.find_one_and_update({"ROOM": self.room_port}, {'$set': {"USERS": self.users}}, return_document=ReturnDocument.AFTER)
+        return updated
 
     def room_loop(self):
         schedule.every(5).minutes.do(self.log_online_users)
         schedule.every(5).minutes.do(self.presence)
-        schedule.every(5).minutes.do(self.cleanup)
-        while self.inputs:
-            schedule.run_pending()
+        schedule.every(1).minutes.do(self.cleanup)
+        stop_run_continuously = run_continuously(60)
+        while len(self.inputs) > 0:
             readable, writable, exceptional = select.select(self.inputs, self.outputs, self.inputs)
             # Handle inputs
             for s in readable:
@@ -100,16 +126,13 @@ class room_socket():
 
             # Handle "exceptional conditions"
             for s in exceptional:
-                # Stop listening for input on the connection
-                self.inputs.remove(s)
-                if s in self.outputs:
-                    self.outputs.remove(s)
-                s.close()
-
-                # Remove message queue
-                del self.message_queues[s.getpeername()]
+                self.handle_error(s)
             sleep(0.2)
+        self.room_logger.debug("room loop exited")
+        stop_run_continuously.set()
+        self.room_logger.debug("event running stopped")
         self.room_logger.info(f"room {self.room_port} closing")
+        return
 
     def send_data(self, s):
         self.room_logger.debug(f"sending message to {s.getpeername()}")
@@ -151,7 +174,10 @@ class room_socket():
             if operation == "GREETING":
                 username = decoded_data.get("username", None)
                 user_ip = decoded_data.get("user_ip", None)
-                if user_ip != connection.getpeername():
+                if user_ip[0] == "localhost":
+                    user_ip[0] = "127.0.0.1"
+                if tuple(user_ip) != connection.getpeername():
+                    self.room_logger.warning(f"ip mismatch on user {username}, ip {connection.getpeername()}, ip supplied {user_ip}")
                     error_response = json.dumps(({"error": ")"}))
                     connection.send(error_response.encode("UTF-8"))
                 if user_ip and username not in self.users.keys():
@@ -206,6 +232,17 @@ class room_socket():
                 s.send(error_response.encode("UTF-8"))
             except UnboundLocalError:
                 pass
+
+
+    def handle_error(self, s):
+        # Stop listening for input on the connection
+        self.inputs.remove(s)
+        if s in self.outputs:
+            self.outputs.remove(s)
+        s.close()
+
+        # Remove message queue
+        del self.message_queues[s.getpeername()]
 
 
 class room_server():
@@ -298,7 +335,7 @@ class room_server():
             room.join()
 
     def add_room(self, room):
-        added_room = self.collection.insert_one({"ROOM": room, "Blacklist": [], "Whitelist": [], "Users": []}).inserted_id
+        added_room = self.collection.insert_one({"ROOM": room, "Blacklist": [], "Whitelist": [], "Users": {}}).inserted_id
         self.base_logger.info(f"created room records, room № {room}")
         return added_room
 

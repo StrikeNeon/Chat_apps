@@ -41,7 +41,7 @@ class client():
         self.client_socket = self.make_socket()
         self.client_socket.connect((self.room_service[0], room_no))
 
-        greeting = {"username": self.username, "user_ip": [self.ip, self.port]}
+        greeting = {"OPS": "GREETING", "username": self.username, "user_ip": [self.ip, self.port]}
         self.client_socket.send(json.dumps(greeting).encode("UTF-8"))
         logger.debug("greeting sent")
         response = self.client_socket.recv(1024)
@@ -57,7 +57,7 @@ class client():
             input_thread.join()
             output_thread.join()
         else:
-            pass
+            logger.error(f"not connected, {decoded_response}")
 
     def send_loop(self):
         while self.connected:
