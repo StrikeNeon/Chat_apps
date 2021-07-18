@@ -1,7 +1,5 @@
 from threading import Thread
 import socket
-import sys
-import select
 import json
 import loguru
 from time import sleep
@@ -11,11 +9,12 @@ logger = loguru.logger
 
 
 class client():
-    def __init__(self, ip, port, username):
+    def __init__(self, ip, port, username, password):
         self.room_service = ("127.0.0.1", 6661)
         self.ip = ip
         self.port = port
         self.username = username
+        self.password = password
         self.connected = False
 
     def make_socket(self):
@@ -28,7 +27,7 @@ class client():
         self.client_socket = self.make_socket()
         self.client_socket.connect(self.room_service)
         logger.debug(f"connected to room service |{self.client_socket}")
-        greeting = {"username": self.username, "target_room": room}
+        greeting = {"OPS": "GREETING", "username": self.username, "password": self.password, "target_room": room}
         self.client_socket.send(json.dumps(greeting).encode("UTF-8"))
         logger.debug("greeting sent")
         response = self.client_socket.recv(1024)
@@ -36,6 +35,24 @@ class client():
         logger.debug(f"response recieved, closing {decoded_response}")
         self.client_socket.close()
         return decoded_response
+
+    def register(self, info_dict):
+        self.client_socket = self.make_socket()
+        self.client_socket.connect(self.room_service)
+        logger.debug(f"connected to room service |{self.client_socket}")
+        greeting = {"OPS": "REG", "username": self.username, "password": self.password, "info": info_dict}
+        self.client_socket.send(json.dumps(greeting).encode("UTF-8"))
+        logger.debug("registration data sent")
+        response = self.client_socket.recv(1024)
+        decoded_response = json.loads(response.decode("UTF-8"))
+        if decoded_response.get("status", None) == "success":
+            logger.debug(f"user registered, closing {decoded_response}")
+            self.client_socket.close()
+            return decoded_response
+        else:
+            logger.debug(f"user not registered, closing {decoded_response}")
+            self.client_socket.close()
+            return decoded_response
 
     def main_loop(self, room_no):
         self.client_socket = self.make_socket()
@@ -46,7 +63,7 @@ class client():
         logger.debug("greeting sent")
         response = self.client_socket.recv(1024)
         decoded_response = json.loads(response.decode("UTF-8"))
-        if decoded_response == {"success": "user connected"}:
+        if decoded_response.get("status") == "success":
             logger.info("connected")
 
             self.connected = True
@@ -95,16 +112,18 @@ class client():
 
 
 # client_port = input("input port: ")
-client_port = 9991
-client = client("localhost", int(client_port), "anon")
+client_port = 9994
+client = client("localhost", int(client_port), "anon", "password")
+registered = client.register({"aboutme": "bruh"})
+if registered:
 # room_no = input("connect to room: ")
-room_no = 1234
-response = client.greet(int(room_no))
-if response.get("status") == "success":
-    logger.info(f"connection to room {room_no} allowed")
-    client.main_loop(int(room_no))
-if response.get("status") == "warning":
-    logger.info(f"created room {room_no}")
-    client.main_loop(int(room_no))
-if response.get("status") == "error":
-    logger.info(f"failed, {response.get('message')}")
+    room_no = 1234
+    response = client.greet(int(room_no))
+    if response.get("status") == "success":
+        logger.info(f"connection to room {room_no} allowed")
+        client.main_loop(int(room_no))
+    if response.get("status") == "warning":
+        logger.info(f"created room {room_no}")
+        client.main_loop(int(room_no))
+    if response.get("status") == "error":
+        logger.info(f"failed, {response.get('message')}")
