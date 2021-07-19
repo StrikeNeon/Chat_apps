@@ -58,9 +58,6 @@ class room_socket():
         self.users = {}
         self.active = True
 
-    def close(self):
-        self.room_socket.close()
-
     def log_online_users(self):
         if len(self.inputs) > 0:
             self.room_logger.info(f"users online: {len(self.inputs)-1}|  {self.inputs[1:]}")
@@ -72,6 +69,7 @@ class room_socket():
         if len(self.inputs) == 1:
             self.room_logger.info("room empty, unmaking")
             self.active = False
+            self.room_logger.info("active status and sechedule event unset")
             return
 
     def presence(self):
@@ -104,7 +102,7 @@ class room_socket():
         schedule.every(5).minutes.do(self.log_online_users)
         schedule.every(5).minutes.do(self.presence)
         schedule.every(1).minutes.do(self.cleanup)
-        stop_run_continuously = run_continuously()
+        self.schedule_event = run_continuously()
         while self.active:
             readable, writable, exceptional = select.select(self.inputs, self.outputs, self.inputs)
             # Handle inputs
@@ -119,10 +117,13 @@ class room_socket():
             for s in exceptional:
                 self.handle_error(s)
             sleep(0.2)
+            if not self.active:
+                break
         self.room_logger.debug("room loop exited")
-        stop_run_continuously.set()
+        self.schedule_event.set()
         self.room_logger.debug("event running stopped")
         self.room_logger.info(f"room {self.room_port} closing")
+        self.room_socket.close()
         return
 
     def send_data(self, s):
