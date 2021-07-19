@@ -171,7 +171,8 @@ class room_socket():
                     self.room_logger.warning(f"ip mismatch on user {username}, ip {connection.getpeername()}, ip supplied {user_ip}")
                     error_response = json.dumps(({"status": "error", "message": ")"}))
                     connection.send(error_response.encode("UTF-8"))
-                if user_ip and username not in self.users.keys():
+                if username not in self.users.keys():
+                    self.users[username] = decoded_data.get("user_ip", None)
                     self.inputs.append(connection)
                     # Give the connection a queue for data we want to send
                     self.message_queues[connection.getpeername()] = queue.Queue()

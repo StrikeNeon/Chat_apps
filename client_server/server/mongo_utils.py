@@ -50,10 +50,10 @@ class mongo_manager():
         return users, updated
 
     def remove_user_from_room(self, user_ip, room_port, users):
-        self.db_logger.debug(user_ip)
-        for user in users.values():
-            if tuple(user.get("user_location")) == user_ip:
-                to_delete = user.get("username")
+        self.db_logger.debug(users)
+        for username, location in users.items():
+            if tuple(location) == user_ip:
+                to_delete = username
                 break
         users.pop(to_delete)
         updated = self.room_collection.find_one_and_update({"ROOM": room_port}, {'$set': {"Users": users}}, return_document=ReturnDocument.AFTER)
