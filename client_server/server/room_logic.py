@@ -67,6 +67,7 @@ class room_socket():
     def cleanup(self):
         self.room_logger.debug("checking activity")
         if len(self.inputs) == 1:
+            self.inputs.pop(0)
             self.room_logger.info("room empty, unmaking")
             self.active = False
             self.room_logger.info("active status unset")
