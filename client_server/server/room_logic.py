@@ -69,8 +69,7 @@ class room_socket():
         if len(self.inputs) == 1:
             self.room_logger.info("room empty, unmaking")
             self.active = False
-            self.room_logger.info("active status and sechedule event unset")
-            return
+            self.room_logger.info("active status unset")
 
     def presence(self):
         timeout = 5
@@ -117,8 +116,6 @@ class room_socket():
             for s in exceptional:
                 self.handle_error(s)
             sleep(0.2)
-            if not self.active:
-                break
         self.room_logger.debug("room loop exited")
         self.schedule_event.set()
         self.room_logger.debug("event running stopped")
