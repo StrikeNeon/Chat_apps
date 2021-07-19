@@ -112,7 +112,7 @@ class client():
 
 
 # client_port = input("input port: ")
-client_port = 9994
+client_port = 9991
 client = client("localhost", int(client_port), "anon", "password")
 registered = client.register({"aboutme": "bruh"})
 if registered:

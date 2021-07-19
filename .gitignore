@@ -1,3 +1,4 @@
 room_db
 venv
 old_files
+*.pyc
