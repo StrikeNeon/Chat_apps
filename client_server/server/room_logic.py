@@ -121,7 +121,6 @@ class room_socket():
         self.room_logger.debug("event running stopped")
         self.room_logger.info(f"room {self.room_port} closing")
         self.room_socket.close()
-        return
 
     def send_data(self, s):
         self.room_logger.debug(f"sending message to {s.getpeername()}")
