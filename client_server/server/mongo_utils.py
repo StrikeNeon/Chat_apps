@@ -76,6 +76,19 @@ class mongo_manager():
         updated = self.user_collection.find_one_and_update({"username": username}, {'$pull': {"contacts": other_username}}, return_document=ReturnDocument.AFTER)
         return updated
 
+    def get_contacts(self, username):
+        user_data = self.user_collection.find_one({"username": username})
+        if user_data:
+            contacts = user_data.get("contacts")
+            return contacts
+
+    def find_user(self, username):
+        users_data = self.room_collection.find_one({"ROOM": 0}).get("Users")
+        if users_data:
+            user_location = users_data.get(username)
+            if user_location:
+                return user_location
+
     def flush_room_zero(self):
         old_room = self.room_collection.find_one({"ROOM": 0})
         if old_room:

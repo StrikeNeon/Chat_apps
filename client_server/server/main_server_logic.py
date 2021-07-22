@@ -60,6 +60,103 @@ class room_server():
         self.users = {}
         self.running = True
 
+    def register_user(self, greeting_data, conn):
+        if not greeting_data.get('username') or not greeting_data.get('password'):
+            added = None
+        else:
+            added = db_manager.add_user(greeting_data.get('username'), greeting_data.get('password'), greeting_data.get('info'))
+        if not added:
+            error_response = json.dumps(({"status": 403, "alert": "already taken"}))
+            conn.send(error_response.encode("UTF-8"))
+            conn.close()
+        else:
+            error_response = json.dumps(({"status":200, "alert": "registered user"}))
+            conn.send(error_response.encode("UTF-8"))
+            conn.close()
+
+    def login_user(self, greeting_data, conn):
+        if not greeting_data.get('username') or not greeting_data.get('password'):
+            error_response = json.dumps(({"status": 400, "alert": "greeting data malformed"}))
+            conn.send(error_response.encode("UTF-8"))
+            conn.close()
+            self.base_logger.warning(f"malformed data at {conn}, data: {greeting_data}")
+        user_check = db_manager.check_user(greeting_data.get('username'), greeting_data.get('password'))
+        if user_check:
+            error_response = json.dumps(({"status": 200, "alert": f"logged {greeting_data.get('username')} in", "token": "token"}))
+            conn.send(error_response.encode("UTF-8"))
+            conn.close()
+        else:
+            error_response = json.dumps(({"status": 400, "alert": "username or password is incorrect"}))
+            conn.send(error_response.encode("UTF-8"))
+            conn.close()
+
+    def find_user(self, greeting_data, conn):
+        if not greeting_data.get('username'):
+            error_response = json.dumps(({"status": 400, "alert": "greeting data malformed"}))
+            conn.send(error_response.encode("UTF-8"))
+            conn.close()
+            self.base_logger.warning(f"malformed data at {conn}, data: {greeting_data}")
+        user_check = db_manager.find_user(greeting_data.get('username'))
+        if user_check:
+            error_response = json.dumps(({"status": 200, "alert": f"user {greeting_data.get('username')} found", "location": user_check}))
+            conn.send(error_response.encode("UTF-8"))
+            conn.close()
+        else:
+            error_response = json.dumps(({"status": 202, "alert": "user wasn't found"}))
+            conn.send(error_response.encode("UTF-8"))
+            conn.close()
+
+    def greet(self, greeting_data, conn):
+        if not greeting_data.get('username') or not greeting_data.get("target_room"):
+            error_response = json.dumps(({"status": 400, "alert": "data malformed"}))
+            conn.send(error_response.encode("UTF-8"))
+            conn.close()
+            self.base_logger.warning(f"malformed data at {conn}, data: {greeting_data}")
+        if not greeting_data.get('token'):
+            error_response = json.dumps(({"status": 403, "alert": "not logged in"}))
+            conn.send(error_response.encode("UTF-8"))
+            conn.close()
+            self.base_logger.warning(f"non logged in user attempted to enter roo|{conn}, data: {greeting_data}")
+        self.base_logger.info(f'greetings from {greeting_data.get("username")} {greeting_data}')
+        location = greeting_data.get("target_room")
+        if location == self.base_port:
+            error_response = json.dumps(({"status": 403, "alert": "no"}))
+            conn.send(error_response.encode("UTF-8"))
+            conn.close()
+            self.base_logger.warning(f"{conn.getpeername()} tried to override base socket")
+        else:
+            room_data = db_manager.room_collection.find_one({"ROOM": location})
+            self.base_logger.debug(f"queried data for {location}| {room_data}")
+            if not room_data:
+                self.base_logger.debug("no room found, creating")
+                room_response = json.dumps(({"status": 201, "alert": "no room found, opening new"}))
+                conn.send(room_response.encode("UTF-8"))
+                room_thread = Thread(target=self.open_room, args=([location]))
+                room_thread.start()
+                self.rooms.append((room_thread, location))
+                conn.close()
+            else:
+                if greeting_data.get('username') not in room_data.get("Blacklist"):
+                    error_response = json.dumps(({"status": 200, "alert": "connection allowed"}))
+                    result_of_check = self.base_socket.connect_ex((self.base_ip, location))
+                    if result_of_check == 0:  # port open
+                        self.base_logger.info(f"allowed user {greeting_data.get('username')} to connect to room {location}")
+                    else:
+                        self.base_logger.info(f"recreated room {location}")
+                        room_thread = Thread(target=self.open_room, args=([location]))
+                        room_thread.start()
+                        self.rooms.append((room_thread, location))
+                    self.base_logger.info(f"allowed user {greeting_data.get('username')} to connect to room {location}")
+                    self.users[greeting_data.get('username')] = location
+                    db_manager.add_user_to_room(conn.getpeername(), greeting_data.get('username'), location, self.users)
+                    conn.send(error_response.encode("UTF-8"))
+                    conn.close()
+                else:
+                    error_response = json.dumps(({"status": 404, "alert": "no room found"}))
+                    conn.send(error_response.encode("UTF-8"))
+                    conn.close()
+                    self.base_logger.warning("user blacklisted")
+
     def room_service(self):
         self.base_logger.debug("main loop started")
         while self.running:
@@ -71,72 +168,16 @@ class room_server():
                 greeting_data = json.loads((conn.recv(1024)).decode("UTF-8"))
                 operation = greeting_data.get("OPS", None)
                 if operation:
+                    if operation == "login":
+                        self.login_user(greeting_data, conn)
                     if operation == "GREETING":
-                        if not greeting_data.get('username') or not greeting_data.get('password') or not greeting_data.get("target_room"):
-                            error_response = json.dumps(({"status": "error", "message": "data malformed"}))
-                            conn.send(error_response.encode("UTF-8"))
-                            conn.close()
-                            self.base_logger.warning(f"malformed data at {conn}, data: {greeting_data}")
-                        self.base_logger.info(f'greetings from {greeting_data.get("username")} {greeting_data}')
-                        user_validation = db_manager.check_user(greeting_data.get('username'), greeting_data.get('password'))
-                        if user_validation:
-                            location = greeting_data.get("target_room")
-                            if location == self.base_port:
-                                error_response = json.dumps(({"status": "error", "message": "no"}))
-                                conn.send(error_response.encode("UTF-8"))
-                                conn.close()
-                                self.base_logger.warning(f"{conn.getpeername()} tried to override base socket")
-                            else:
-                                room_data = db_manager.room_collection.find_one({"ROOM": location})
-                                self.base_logger.debug(f"queried data for {location}| {room_data}")
-                                if not room_data:
-                                    self.base_logger.debug("no room found, creating")
-                                    room_response = json.dumps(({"status": "warning", "message": "no room found, opening new"}))
-                                    conn.send(room_response.encode("UTF-8"))
-                                    room_thread = Thread(target=self.open_room, args=([location]))
-                                    room_thread.start()
-                                    self.rooms.append((room_thread, location))
-                                    conn.close()
-                                else:
-                                    if greeting_data.get('username') not in room_data.get("Blacklist"):
-                                        error_response = json.dumps(({"status": "success", "message": "connection allowed"}))
-                                        result_of_check = self.base_socket.connect_ex((self.base_ip, location))
-                                        if result_of_check == 0:  # port open
-                                            self.base_logger.info(f"allowed user {greeting_data.get('username')} to connect to room {location}")
-                                        else:
-                                            self.base_logger.info(f"recreated room {location}")
-                                            room_thread = Thread(target=self.open_room, args=([location]))
-                                            room_thread.start()
-                                            self.rooms.append((room_thread, location))
-                                        self.base_logger.info(f"allowed user {greeting_data.get('username')} to connect to room {location}")
-                                        self.users[greeting_data.get('username')] = location
-                                        db_manager.add_user_to_room(conn.getpeername(), greeting_data.get('username'), location, self.users)
-                                        conn.send(error_response.encode("UTF-8"))
-                                        conn.close()
-                                    else:
-                                        error_response = json.dumps(({"status": "error", "message": "no room found"}))
-                                        conn.send(error_response.encode("UTF-8"))
-                                        conn.close()
-                                        self.base_logger.warning("user blacklisted")
-                        else:
-                            error_response = json.dumps(({"status": "error", "message": "username or password is incorrect"}))
-                            conn.send(error_response.encode("UTF-8"))
-                            conn.close()
+                        self.greet(greeting_data, conn)
                     elif operation == "REG":
-                        if not greeting_data.get('username') or not greeting_data.get('password'):
-                            added = None
-                        else:
-                            added = db_manager.add_user(greeting_data.get('username'), greeting_data.get('password'), greeting_data.get('info'))
-                        if not added:
-                            error_response = json.dumps(({"status": "error", "message": "already taken"}))
-                            conn.send(error_response.encode("UTF-8"))
-                            conn.close()
-                        else:
-                            error_response = json.dumps(({"status":"success", "message": "registered user"}))
-                            conn.send(error_response.encode("UTF-8"))
-                            conn.close()
+                        self.register_user(greeting_data, conn)
+                    elif operation == "find":
+                        self.find_user(greeting_data, conn)
                 else:
-                    error_response = json.dumps(({"status":"error", "message": "no operation specified"}))
+                    error_response = json.dumps(({"status": 400, "alert": "no operation specified"}))
                     conn.send(error_response.encode("UTF-8"))
                     conn.close()
                     self.base_logger.warning("no operation specified")

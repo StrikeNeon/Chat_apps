@@ -23,11 +23,25 @@ class client():
         logger.debug(f"made socket |{client_socket}")
         return client_socket
 
-    def greet(self, room):
+    def login(self, room):
         self.client_socket = self.make_socket()
         self.client_socket.connect(self.room_service)
         logger.debug(f"connected to room service |{self.client_socket}")
-        greeting = {"OPS": "GREETING", "username": self.username, "password": self.password, "target_room": room}
+        greeting = {"action": "login", "username": self.username, "password": self.password}
+        self.client_socket.send(json.dumps(greeting).encode("UTF-8"))
+        logger.debug("login data sent sent")
+        response = self.client_socket.recv(1024)
+        decoded_response = json.loads(response.decode("UTF-8"))
+        if decoded_response.get("status") == 200:
+            logger.debug(f"response recieved, closing {decoded_response}")
+            self.client_socket.close()
+        return decoded_response.get("token")
+
+    def greet(self, room, token):
+        self.client_socket = self.make_socket()
+        self.client_socket.connect(self.room_service)
+        logger.debug(f"connected to room service |{self.client_socket}")
+        greeting = {"action": "GREETING", "username": self.username, "password": self.password, "target_room": room, "token": token}
         self.client_socket.send(json.dumps(greeting).encode("UTF-8"))
         logger.debug("greeting sent")
         response = self.client_socket.recv(1024)
@@ -40,12 +54,12 @@ class client():
         self.client_socket = self.make_socket()
         self.client_socket.connect(self.room_service)
         logger.debug(f"connected to room service |{self.client_socket}")
-        greeting = {"OPS": "REG", "username": self.username, "password": self.password, "info": info_dict}
+        greeting = {"action": "REG", "username": self.username, "password": self.password, "info": info_dict}
         self.client_socket.send(json.dumps(greeting).encode("UTF-8"))
         logger.debug("registration data sent")
         response = self.client_socket.recv(1024)
         decoded_response = json.loads(response.decode("UTF-8"))
-        if decoded_response.get("status", None) == "success":
+        if decoded_response.get("status", None) == 200:
             logger.debug(f"user registered, closing {decoded_response}")
             self.client_socket.close()
             return decoded_response
@@ -58,12 +72,12 @@ class client():
         self.client_socket = self.make_socket()
         self.client_socket.connect((self.room_service[0], room_no))
 
-        greeting = {"OPS": "GREETING", "username": self.username, "user_ip": [self.ip, self.port]}
+        greeting = {"action": "GREETING", "username": self.username, "user_ip": [self.ip, self.port]}
         self.client_socket.send(json.dumps(greeting).encode("UTF-8"))
         logger.debug("greeting sent")
         response = self.client_socket.recv(1024)
         decoded_response = json.loads(response.decode("UTF-8"))
-        if decoded_response.get("status") == "success":
+        if decoded_response.get("status") == 200:
             logger.info("connected")
 
             self.connected = True
@@ -80,13 +94,13 @@ class client():
         while self.connected:
             message = input("MGS: ")
             if message == "QUIT":
-                structured_message = {"OPS": "QUIT"}
+                structured_message = {"action": "QUIT"}
                 self.client_socket.send(json.dumps(structured_message).encode("UTF-8"))
                 self.connected = False
                 self.client_socket.close()
                 return
             else:
-                structured_message = {"OPS": "MESSAGE", "at_user": "all", "from_user": (self.ip, self.port), "message": message}
+                structured_message = {"action": "MESSAGE", "at_user": "all", "from_user": (self.ip, self.port), "message": message}
                 self.client_socket.send(json.dumps(structured_message).encode("UTF-8"))
 
     def recieve_loop(self):
@@ -95,8 +109,8 @@ class client():
                 message = self.client_socket.recv(1024)
                 logger.debug(message.decode("UTF-8"))
                 decoded_message = json.loads(message.decode("UTF-8"))
-                if decoded_message.get("OPS", None) == "presence":
-                    structured_message = {"OPS": "MESSAGE", "response": "here"}
+                if decoded_message.get("action", None) == "presence":
+                    structured_message = {"action": "MESSAGE", "response": "here"}
                     self.client_socket.send(json.dumps(structured_message).encode("UTF-8"))
                 print(f"message from: {decoded_message.get('from_user')}| {decoded_message.get('message')}")
             except json.decoder.JSONDecodeError:
@@ -115,15 +129,17 @@ class client():
 client_port = 9991
 client = client("localhost", int(client_port), "anon", "password")
 registered = client.register({"aboutme": "bruh"})
-if registered:
+
+token = client.login()
+if token:
 # room_no = input("connect to room: ")
     room_no = 1234
-    response = client.greet(int(room_no))
-    if response.get("status") == "success":
+    response = client.greet(int(room_no), token)
+    if response.get("status") == 200:
         logger.info(f"connection to room {room_no} allowed")
         client.main_loop(int(room_no))
-    if response.get("status") == "warning":
+    if response.get("status") == 201:
         logger.info(f"created room {room_no}")
         client.main_loop(int(room_no))
-    if response.get("status") == "error":
-        logger.info(f"failed, {response.get('message')}")
+    if response.get("status") > 300:
+        logger.info(f"failed, {response.get('status')} {response.get('alert')}")

@@ -78,7 +78,7 @@ class room_socket():
         self.room_logger.debug("sending presences")
         for check_socket in self.inputs:
             if check_socket is not self.room_socket:
-                presence_message = {"OPS": "presence"}
+                presence_message = {"action": "presence"}
                 try:
                     check_socket.send(json.dumps(presence_message).encode("UTF-8"))
                     data = check_socket.recv(1024)
@@ -155,7 +155,7 @@ class room_socket():
             connection.setblocking(0)
             data = connection.recv(1024)
             decoded_data = json.loads(data.decode("UTF-8"))
-            operation = decoded_data.get("OPS", None)
+            operation = decoded_data.get("action", None)
             if not operation:
                 error_response = json.dumps(({"error": "no operation specified"}))
                 connection.send(error_response.encode("UTF-8"))
@@ -167,7 +167,7 @@ class room_socket():
                     user_ip[0] = "127.0.0.1"
                 if tuple(user_ip) != connection.getpeername():
                     self.room_logger.warning(f"ip mismatch on user {username}, ip {connection.getpeername()}, ip supplied {user_ip}")
-                    error_response = json.dumps(({"status": "error", "message": ")"}))
+                    error_response = json.dumps(({"status": "error", "alert": ")"}))
                     connection.send(error_response.encode("UTF-8"))
                 if username not in self.users.keys():
                     self.users[username] = decoded_data.get("user_ip", None)
@@ -175,10 +175,10 @@ class room_socket():
                     # Give the connection a queue for data we want to send
                     self.message_queues[connection.getpeername()] = queue.Queue()
                     self.room_logger.info(f"new connection {connection.getpeername()}")
-                    error_response = json.dumps(({"status":"success","message": "user connected"}))
+                    error_response = json.dumps(({"status":"success","alert": "user connected"}))
                     connection.send(error_response.encode("UTF-8"))
                 else:
-                    error_response = json.dumps(({"status": "error", "message": "non unique username"}))
+                    error_response = json.dumps(({"status": "error", "alert": "non unique username"}))
                     connection.send(error_response.encode("UTF-8"))
 
         else:
@@ -195,16 +195,16 @@ class room_socket():
             try:
                 decoded_data = json.loads(data.decode("UTF-8"))
                 self.room_logger.info(f"recieved message from {s.getpeername()}, {decoded_data}")
-                operation = decoded_data.get("OPS", None)
+                operation = decoded_data.get("action", None)
                 if not operation:
-                    error_response = json.dumps(({"status":"error","message": "no operation specified"}))
+                    error_response = json.dumps(({"status": 400, "alert": "no operation specified"}))
                     s.send(error_response.encode("UTF-8"))
                 if operation == "QUIT":
                     self.room_logger.info(f"user {s.getpeername()} quit")
                 elif operation == "MESSAGE":
                     at_user = decoded_data.get("at_user", None)
                     if not at_user:
-                        error_response = json.dumps(({"status":"error", "message": "sent to noone"}))
+                        error_response = json.dumps(({"status": 400, "alert": "sent to noone"}))
                         s.send(error_response.encode("UTF-8"))
                     if at_user == "all":
                         for user in self.message_queues.keys():
@@ -218,7 +218,7 @@ class room_socket():
                         self.outputs.append(s)
             except json.decoder.JSONDecodeError:
                 self.room_logger.info(f"malformed message recieved from {connection.getpeername()}")
-                error_response = json.dumps(({"status": "error", "message": "malformed"}))
+                error_response = json.dumps(({"status": 500, "alert": "malformed"}))
                 s.send(error_response.encode("UTF-8"))
             except UnboundLocalError:
                 pass
