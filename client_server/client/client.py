@@ -23,7 +23,7 @@ class client():
         logger.debug(f"made socket |{client_socket}")
         return client_socket
 
-    def login(self, room):
+    def login(self):
         self.client_socket = self.make_socket()
         self.client_socket.connect(self.room_service)
         logger.debug(f"connected to room service |{self.client_socket}")
@@ -138,8 +138,8 @@ if token:
     if response.get("status") == 200:
         logger.info(f"connection to room {room_no} allowed")
         client.main_loop(int(room_no))
-    if response.get("status") == 201:
+    elif response.get("status") == 201:
         logger.info(f"created room {room_no}")
         client.main_loop(int(room_no))
-    if response.get("status") > 300:
+    elif response.get("status") > 300:
         logger.info(f"failed, {response.get('status')} {response.get('alert')}")

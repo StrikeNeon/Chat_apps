@@ -70,7 +70,7 @@ class room_server():
             conn.send(error_response.encode("UTF-8"))
             conn.close()
         else:
-            error_response = json.dumps(({"status":200, "alert": "registered user"}))
+            error_response = json.dumps(({"status": 200, "alert": "registered user"}))
             conn.send(error_response.encode("UTF-8"))
             conn.close()
 
@@ -166,7 +166,7 @@ class room_server():
                 self.base_logger.info(f"Received connection from {conn.getpeername()}")
                 self.base_logger.info(f'Connection Established. Connected From: {conn.getpeername()}')
                 greeting_data = json.loads((conn.recv(1024)).decode("UTF-8"))
-                operation = greeting_data.get("OPS", None)
+                operation = greeting_data.get("action", None)
                 if operation:
                     if operation == "login":
                         self.login_user(greeting_data, conn)

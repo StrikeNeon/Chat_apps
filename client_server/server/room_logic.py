@@ -157,7 +157,7 @@ class room_socket():
             decoded_data = json.loads(data.decode("UTF-8"))
             operation = decoded_data.get("action", None)
             if not operation:
-                error_response = json.dumps(({"error": "no operation specified"}))
+                error_response = json.dumps(({400: "no operation specified"}))
                 connection.send(error_response.encode("UTF-8"))
 
             if operation == "GREETING":
@@ -167,7 +167,7 @@ class room_socket():
                     user_ip[0] = "127.0.0.1"
                 if tuple(user_ip) != connection.getpeername():
                     self.room_logger.warning(f"ip mismatch on user {username}, ip {connection.getpeername()}, ip supplied {user_ip}")
-                    error_response = json.dumps(({"status": "error", "alert": ")"}))
+                    error_response = json.dumps(({"status": 403, "alert": ")"}))
                     connection.send(error_response.encode("UTF-8"))
                 if username not in self.users.keys():
                     self.users[username] = decoded_data.get("user_ip", None)
@@ -175,10 +175,10 @@ class room_socket():
                     # Give the connection a queue for data we want to send
                     self.message_queues[connection.getpeername()] = queue.Queue()
                     self.room_logger.info(f"new connection {connection.getpeername()}")
-                    error_response = json.dumps(({"status":"success","alert": "user connected"}))
+                    error_response = json.dumps(({"status":200, "alert": "user connected"}))
                     connection.send(error_response.encode("UTF-8"))
                 else:
-                    error_response = json.dumps(({"status": "error", "alert": "non unique username"}))
+                    error_response = json.dumps(({"status": 403, "alert": "non unique username"}))
                     connection.send(error_response.encode("UTF-8"))
 
         else:
@@ -217,7 +217,7 @@ class room_socket():
                     if s not in self.outputs:
                         self.outputs.append(s)
             except json.decoder.JSONDecodeError:
-                self.room_logger.info(f"malformed message recieved from {connection.getpeername()}")
+                self.room_logger.info(f"malformed message recieved from {s.getpeername()}")
                 error_response = json.dumps(({"status": 500, "alert": "malformed"}))
                 s.send(error_response.encode("UTF-8"))
             except UnboundLocalError:
