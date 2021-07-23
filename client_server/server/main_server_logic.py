@@ -6,7 +6,8 @@ import schedule
 from time import sleep
 from room_logic import room_socket
 from mongo_utils import mongo_manager
-
+from datetime import datetime, timedelta
+from settings import ACCESS_TOKEN_EXPIRE_MINUTES
 
 db_manager = mongo_manager()
 
@@ -66,61 +67,70 @@ class room_server():
         else:
             added = db_manager.add_user(greeting_data.get('username'), greeting_data.get('password'), greeting_data.get('info'))
         if not added:
-            error_response = json.dumps(({"status": 403, "alert": "already taken"}))
+            error_response = json.dumps(({"status": 403, "alert": "already taken", "time": datetime.timestamp(datetime.now())}))
             conn.send(error_response.encode("UTF-8"))
             conn.close()
         else:
-            error_response = json.dumps(({"status": 200, "alert": "registered user"}))
+            error_response = json.dumps(({"status": 200, "alert": "registered user", "time": datetime.timestamp(datetime.now())}))
             conn.send(error_response.encode("UTF-8"))
             conn.close()
 
     def login_user(self, greeting_data, conn):
         if not greeting_data.get('username') or not greeting_data.get('password'):
-            error_response = json.dumps(({"status": 400, "alert": "greeting data malformed"}))
+            error_response = json.dumps(({"status": 400, "alert": "greeting data malformed", "time": datetime.timestamp(datetime.now())}))
             conn.send(error_response.encode("UTF-8"))
             conn.close()
             self.base_logger.warning(f"malformed data at {conn}, data: {greeting_data}")
         user_check = db_manager.check_user(greeting_data.get('username'), greeting_data.get('password'))
         if user_check:
-            error_response = json.dumps(({"status": 200, "alert": f"logged {greeting_data.get('username')} in", "token": "token"}))
+            access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+            access_token = db_manager.create_access_token(data={"sub": user_check["username"]},
+                                                          expires_delta=access_token_expires)
+            error_response = json.dumps(({"status": 200, "alert": f"logged {greeting_data.get('username')} in", "token": access_token, "time": datetime.timestamp(datetime.now())}))
             conn.send(error_response.encode("UTF-8"))
             conn.close()
         else:
-            error_response = json.dumps(({"status": 400, "alert": "username or password is incorrect"}))
+            error_response = json.dumps(({"status": 400, "alert": "username or password is incorrect", "time": datetime.timestamp(datetime.now())}))
             conn.send(error_response.encode("UTF-8"))
             conn.close()
 
     def find_user(self, greeting_data, conn):
         if not greeting_data.get('username'):
-            error_response = json.dumps(({"status": 400, "alert": "greeting data malformed"}))
+            error_response = json.dumps(({"status": 400, "alert": "greeting data malformed", "time": datetime.timestamp(datetime.now())}))
             conn.send(error_response.encode("UTF-8"))
             conn.close()
             self.base_logger.warning(f"malformed data at {conn}, data: {greeting_data}")
         user_check = db_manager.find_user(greeting_data.get('username'))
         if user_check:
-            error_response = json.dumps(({"status": 200, "alert": f"user {greeting_data.get('username')} found", "location": user_check}))
+            error_response = json.dumps(({"status": 200, "alert": f"user {greeting_data.get('username')} found", "location": user_check, "time": datetime.timestamp(datetime.now())}))
             conn.send(error_response.encode("UTF-8"))
             conn.close()
         else:
-            error_response = json.dumps(({"status": 202, "alert": "user wasn't found"}))
+            error_response = json.dumps(({"status": 202, "alert": "user wasn't found", "time": datetime.timestamp(datetime.now())}))
             conn.send(error_response.encode("UTF-8"))
             conn.close()
 
     def greet(self, greeting_data, conn):
         if not greeting_data.get('username') or not greeting_data.get("target_room"):
-            error_response = json.dumps(({"status": 400, "alert": "data malformed"}))
+            error_response = json.dumps(({"status": 400, "alert": "data malformed", "time": datetime.timestamp(datetime.now())}))
             conn.send(error_response.encode("UTF-8"))
             conn.close()
             self.base_logger.warning(f"malformed data at {conn}, data: {greeting_data}")
         if not greeting_data.get('token'):
-            error_response = json.dumps(({"status": 403, "alert": "not logged in"}))
+            error_response = json.dumps(({"status": 403, "alert": "not logged in", "time": datetime.timestamp(datetime.now())}))
             conn.send(error_response.encode("UTF-8"))
             conn.close()
-            self.base_logger.warning(f"non logged in user attempted to enter roo|{conn}, data: {greeting_data}")
+            self.base_logger.warning(f"non logged in user attempted to enter room|{conn}, data: {greeting_data}")
+        current_user = db_manager.verify_token(greeting_data.get('token'))
+        if not current_user or current_user["username"] != greeting_data.get('username'):
+            error_response = json.dumps(({"status": 403, "alert": "token error", "time": datetime.timestamp(datetime.now())}))
+            conn.send(error_response.encode("UTF-8"))
+            conn.close()
+            self.base_logger.warning(f"token error on user {greeting_data.get('username')}|{conn}, verified: {current_user}")
         self.base_logger.info(f'greetings from {greeting_data.get("username")} {greeting_data}')
         location = greeting_data.get("target_room")
         if location == self.base_port:
-            error_response = json.dumps(({"status": 403, "alert": "no"}))
+            error_response = json.dumps(({"status": 403, "alert": "no", "time": datetime.timestamp(datetime.now())}))
             conn.send(error_response.encode("UTF-8"))
             conn.close()
             self.base_logger.warning(f"{conn.getpeername()} tried to override base socket")
@@ -129,7 +139,7 @@ class room_server():
             self.base_logger.debug(f"queried data for {location}| {room_data}")
             if not room_data:
                 self.base_logger.debug("no room found, creating")
-                room_response = json.dumps(({"status": 201, "alert": "no room found, opening new"}))
+                room_response = json.dumps(({"status": 201, "alert": "no room found, opening new", "time": datetime.timestamp(datetime.now())}))
                 conn.send(room_response.encode("UTF-8"))
                 room_thread = Thread(target=self.open_room, args=([location]))
                 room_thread.start()
@@ -137,7 +147,7 @@ class room_server():
                 conn.close()
             else:
                 if greeting_data.get('username') not in room_data.get("Blacklist"):
-                    error_response = json.dumps(({"status": 200, "alert": "connection allowed"}))
+                    error_response = json.dumps(({"status": 200, "alert": "connection allowed", "time": datetime.timestamp(datetime.now())}))
                     result_of_check = self.base_socket.connect_ex((self.base_ip, location))
                     if result_of_check == 0:  # port open
                         self.base_logger.info(f"allowed user {greeting_data.get('username')} to connect to room {location}")
@@ -152,7 +162,7 @@ class room_server():
                     conn.send(error_response.encode("UTF-8"))
                     conn.close()
                 else:
-                    error_response = json.dumps(({"status": 404, "alert": "no room found"}))
+                    error_response = json.dumps(({"status": 404, "alert": "no room found", "time": datetime.timestamp(datetime.now())}))
                     conn.send(error_response.encode("UTF-8"))
                     conn.close()
                     self.base_logger.warning("user blacklisted")
@@ -177,7 +187,7 @@ class room_server():
                     elif operation == "find":
                         self.find_user(greeting_data, conn)
                 else:
-                    error_response = json.dumps(({"status": 400, "alert": "no operation specified"}))
+                    error_response = json.dumps(({"status": 400, "alert": "no operation specified", "time": datetime.timestamp(datetime.now())}))
                     conn.send(error_response.encode("UTF-8"))
                     conn.close()
                     self.base_logger.warning("no operation specified")

@@ -7,6 +7,7 @@ import loguru
 import schedule
 from time import sleep
 from mongo_utils import mongo_manager
+from datetime import datetime
 
 db_manager = mongo_manager()
 
@@ -157,7 +158,7 @@ class room_socket():
             decoded_data = json.loads(data.decode("UTF-8"))
             operation = decoded_data.get("action", None)
             if not operation:
-                error_response = json.dumps(({400: "no operation specified"}))
+                error_response = json.dumps(({status:400, "alert": "no operation specified", "time":datetime.timestamp(datetime.now())}))
                 connection.send(error_response.encode("UTF-8"))
 
             if operation == "GREETING":
@@ -167,7 +168,7 @@ class room_socket():
                     user_ip[0] = "127.0.0.1"
                 if tuple(user_ip) != connection.getpeername():
                     self.room_logger.warning(f"ip mismatch on user {username}, ip {connection.getpeername()}, ip supplied {user_ip}")
-                    error_response = json.dumps(({"status": 403, "alert": ")"}))
+                    error_response = json.dumps(({"status": 403, "alert": ")", "time":datetime.timestamp(datetime.now())}))
                     connection.send(error_response.encode("UTF-8"))
                 if username not in self.users.keys():
                     self.users[username] = decoded_data.get("user_ip", None)
@@ -175,10 +176,10 @@ class room_socket():
                     # Give the connection a queue for data we want to send
                     self.message_queues[connection.getpeername()] = queue.Queue()
                     self.room_logger.info(f"new connection {connection.getpeername()}")
-                    error_response = json.dumps(({"status":200, "alert": "user connected"}))
+                    error_response = json.dumps(({"status":200, "alert": "user connected", "time":datetime.timestamp(datetime.now())}))
                     connection.send(error_response.encode("UTF-8"))
                 else:
-                    error_response = json.dumps(({"status": 403, "alert": "non unique username"}))
+                    error_response = json.dumps(({"status": 403, "alert": "non unique username", "time":datetime.timestamp(datetime.now())}))
                     connection.send(error_response.encode("UTF-8"))
 
         else:
@@ -197,14 +198,14 @@ class room_socket():
                 self.room_logger.info(f"recieved message from {s.getpeername()}, {decoded_data}")
                 operation = decoded_data.get("action", None)
                 if not operation:
-                    error_response = json.dumps(({"status": 400, "alert": "no operation specified"}))
+                    error_response = json.dumps(({"status": 400, "alert": "no operation specified", "time":datetime.timestamp(datetime.now())}))
                     s.send(error_response.encode("UTF-8"))
                 if operation == "QUIT":
                     self.room_logger.info(f"user {s.getpeername()} quit")
                 elif operation == "MESSAGE":
                     at_user = decoded_data.get("at_user", None)
                     if not at_user:
-                        error_response = json.dumps(({"status": 400, "alert": "sent to noone"}))
+                        error_response = json.dumps(({"status": 400, "alert": "sent to noone", "time":datetime.timestamp(datetime.now())}))
                         s.send(error_response.encode("UTF-8"))
                     if at_user == "all":
                         for user in self.message_queues.keys():
@@ -218,7 +219,7 @@ class room_socket():
                         self.outputs.append(s)
             except json.decoder.JSONDecodeError:
                 self.room_logger.info(f"malformed message recieved from {s.getpeername()}")
-                error_response = json.dumps(({"status": 500, "alert": "malformed"}))
+                error_response = json.dumps(({"status": 500, "alert": "malformed", "time":datetime.timestamp(datetime.now())}))
                 s.send(error_response.encode("UTF-8"))
             except UnboundLocalError:
                 pass

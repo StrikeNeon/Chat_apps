@@ -1,5 +1,9 @@
 from pymongo import MongoClient, ReturnDocument
 import loguru
+from passlib.exc import UnknownHashError
+from jose import JWTError, jwt
+from datetime import timedelta, datetime
+from settings import pwd_context, SECRET_KEY, ALGORITHM
 
 
 class mongo_manager():
@@ -13,6 +17,39 @@ class mongo_manager():
 
         self.db_logger = loguru.logger
 
+    def get_password_hash(self, password):
+        return pwd_context.hash(password)
+
+    def verify_password(self, plain_password, hashed_password):
+        try:
+            verification = pwd_context.verify(plain_password, hashed_password)
+            return verification
+        except UnknownHashError:
+            return 403
+
+    def verify_token(self, token: str):
+        try:
+            payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+            username: str = payload.get("sub")
+            if username is None:
+                return 403
+        except JWTError:
+            return 403
+        user = self.user_collection.find_one({"username": username})
+        if user is None:
+            403
+        return user
+
+    def create_access_token(self, data: dict, expires_delta: timedelta = 30):
+        to_encode = data.copy()
+        if expires_delta:
+            expire = datetime.utcnow() + expires_delta
+        else:
+            expire = datetime.utcnow() + timedelta(minutes=15)
+        to_encode.update({"exp": expire})
+        encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+        return encoded_jwt
+
     def add_room(self, room):
         added_room = self.room_collection.insert_one({"ROOM": room, "Blacklist": [], "Whitelist": [], "Users": {}}).inserted_id
         self.db_logger.info(f"created room records, room № {room}")
@@ -25,7 +62,7 @@ class mongo_manager():
     def add_user(self, username, password, user_data):
         user_check = self.user_collection.find_one({"username": username})
         if not user_check:
-            added = self.user_collection.insert_one({"username": username, "password": password, "info": user_data, "contacts": []})
+            added = self.user_collection.insert_one({"username": username, "password": self.get_password_hash(password), "info": user_data, "contacts": []})
             return added
         else:
             return None
@@ -34,10 +71,10 @@ class mongo_manager():
         user_check = self.user_collection.find_one({"username": username})
         if user_check:
             self.db_logger.debug(f"found user {username}")
-            if user_check.get("username") == username and user_check.get("password") == password:
-                return True
+            if self.verify_password(password, user_check["password"]):
+                return user_check
             else:
-                self.db_logger.info(f"failed, recorded name: {user_check.get('username')} supplied name: {username}, recorded password: {user_check.get('password')} supplied password: {password}")
+                self.db_logger.info(f"failed, user: {user_check.get('username')} wrong password")
 
     def add_user_to_room(self, user_ip, username, room_port, users):
         users[username] = {"user_location": user_ip, "username": username}

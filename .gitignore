@@ -3,3 +3,4 @@ venv
 old_files
 *.pyc
 *.ui
+*.json

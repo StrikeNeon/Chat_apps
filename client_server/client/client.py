@@ -3,7 +3,7 @@ import socket
 import json
 import loguru
 from time import sleep
-
+from datetime import datetime
 
 logger = loguru.logger
 
@@ -27,7 +27,7 @@ class client():
         self.client_socket = self.make_socket()
         self.client_socket.connect(self.room_service)
         logger.debug(f"connected to room service |{self.client_socket}")
-        greeting = {"action": "login", "username": self.username, "password": self.password}
+        greeting = {"action": "login", "username": self.username, "password": self.password, "time":datetime.timestamp(datetime.now())}
         self.client_socket.send(json.dumps(greeting).encode("UTF-8"))
         logger.debug("login data sent sent")
         response = self.client_socket.recv(1024)
@@ -41,7 +41,7 @@ class client():
         self.client_socket = self.make_socket()
         self.client_socket.connect(self.room_service)
         logger.debug(f"connected to room service |{self.client_socket}")
-        greeting = {"action": "GREETING", "username": self.username, "password": self.password, "target_room": room, "token": token}
+        greeting = {"action": "GREETING", "username": self.username, "password": self.password, "target_room": room, "token": token, "time":datetime.timestamp(datetime.now())}
         self.client_socket.send(json.dumps(greeting).encode("UTF-8"))
         logger.debug("greeting sent")
         response = self.client_socket.recv(1024)
@@ -54,7 +54,7 @@ class client():
         self.client_socket = self.make_socket()
         self.client_socket.connect(self.room_service)
         logger.debug(f"connected to room service |{self.client_socket}")
-        greeting = {"action": "REG", "username": self.username, "password": self.password, "info": info_dict}
+        greeting = {"action": "REG", "username": self.username, "password": self.password, "info": info_dict, "time":datetime.timestamp(datetime.now())}
         self.client_socket.send(json.dumps(greeting).encode("UTF-8"))
         logger.debug("registration data sent")
         response = self.client_socket.recv(1024)
@@ -72,7 +72,7 @@ class client():
         self.client_socket = self.make_socket()
         self.client_socket.connect((self.room_service[0], room_no))
 
-        greeting = {"action": "GREETING", "username": self.username, "user_ip": [self.ip, self.port]}
+        greeting = {"action": "GREETING", "username": self.username, "user_ip": [self.ip, self.port], "time":datetime.timestamp(datetime.now())}
         self.client_socket.send(json.dumps(greeting).encode("UTF-8"))
         logger.debug("greeting sent")
         response = self.client_socket.recv(1024)
@@ -94,13 +94,13 @@ class client():
         while self.connected:
             message = input("MGS: ")
             if message == "QUIT":
-                structured_message = {"action": "QUIT"}
+                structured_message = {"action": "QUIT", "time":datetime.timestamp(datetime.now())}
                 self.client_socket.send(json.dumps(structured_message).encode("UTF-8"))
                 self.connected = False
                 self.client_socket.close()
                 return
             else:
-                structured_message = {"action": "MESSAGE", "at_user": "all", "from_user": (self.ip, self.port), "message": message}
+                structured_message = {"action": "MESSAGE", "at_user": "all", "from_user": (self.ip, self.port), "message": message, "time":datetime.timestamp(datetime.now())}
                 self.client_socket.send(json.dumps(structured_message).encode("UTF-8"))
 
     def recieve_loop(self):
@@ -110,7 +110,7 @@ class client():
                 logger.debug(message.decode("UTF-8"))
                 decoded_message = json.loads(message.decode("UTF-8"))
                 if decoded_message.get("action", None) == "presence":
-                    structured_message = {"action": "MESSAGE", "response": "here"}
+                    structured_message = {"action": "MESSAGE", "response": "here", "time":datetime.timestamp(datetime.now())}
                     self.client_socket.send(json.dumps(structured_message).encode("UTF-8"))
                 print(f"message from: {decoded_message.get('from_user')}| {decoded_message.get('message')}")
             except json.decoder.JSONDecodeError:
@@ -126,7 +126,7 @@ class client():
 
 
 # client_port = input("input port: ")
-client_port = 9991
+client_port = 9992
 client = client("localhost", int(client_port), "anon", "password")
 registered = client.register({"aboutme": "bruh"})
 
