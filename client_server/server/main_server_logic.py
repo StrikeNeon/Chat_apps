@@ -208,7 +208,6 @@ class room_server():
             self.base_logger.debug("creating_room")
             db_manager.add_room(port)
         room.room_loop()
-        room.close()
         self.base_logger.info(f"room {port} closed")
         db_manager.remove_room(port)
 

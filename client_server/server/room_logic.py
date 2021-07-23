@@ -185,7 +185,7 @@ class room_socket():
         else:
             try:
                 data = s.recv(1024)
-            except ConnectionResetError:
+            except (ConnectionResetError, ConnectionAbortedError):
                 self.room_logger.info(f"user {s.getpeername()} quit")
                 updated, deleted_user = db_manager.remove_user_from_room(s.getpeername(), self.room_port, self.users)
                 if self.message_queues.get(deleted_user):

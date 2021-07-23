@@ -4,6 +4,10 @@ import json
 import loguru
 from time import sleep
 from datetime import datetime
+from Crypto.Cipher import PKCS1_OAEP
+from Crypto.PublicKey import RSA
+from binascii import hexlify
+
 
 logger = loguru.logger
 
@@ -16,6 +20,26 @@ class client():
         self.username = username
         self.password = password
         self.connected = False
+        self.private_key, self.public_key = self.get_keys()
+        self.cypher = PKCS1_OAEP.new(key=self.public_key)
+        self.decypher = PKCS1_OAEP.new(key=self.private_key)
+
+    def get_keys(self):
+        try:
+            #  Generating private key (RsaKey object) of key length of 1024 bits
+            pr_key = RSA.generate(1024)
+            #  Generating the public key (RsaKey object) from the private key
+            pu_key = pr_key.publickey()
+            with open('private_pem.pem', 'w') as pr:
+                pr.write(pr_key.export_key().decode())
+            with open('public_pem.pem', 'w') as pu:
+                pu.write(pu_key.export_key().decode())
+            return pr_key, pu_key
+
+        except FileNotFoundError:
+            pr_key = RSA.import_key(open('private_pem.pem', 'r').read())
+            pu_key = RSA.import_key(open('public_pem.pem', 'r').read())
+            return pr_key, pu_key
 
     def make_socket(self):
         client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -100,6 +124,7 @@ class client():
                 self.client_socket.close()
                 return
             else:
+                # encrypted_message = self.cypher.encrypt(bytes(message, encoding="utf-8"))
                 structured_message = {"action": "MESSAGE", "at_user": "all", "from_user": (self.ip, self.port), "message": message, "time":datetime.timestamp(datetime.now())}
                 self.client_socket.send(json.dumps(structured_message).encode("UTF-8"))
 
@@ -110,8 +135,9 @@ class client():
                 logger.debug(message.decode("UTF-8"))
                 decoded_message = json.loads(message.decode("UTF-8"))
                 if decoded_message.get("action", None) == "presence":
-                    structured_message = {"action": "MESSAGE", "response": "here", "time":datetime.timestamp(datetime.now())}
+                    structured_message = {"action": "presence", "response": "here", "time":datetime.timestamp(datetime.now())}
                     self.client_socket.send(json.dumps(structured_message).encode("UTF-8"))
+                # decrypted_message = self.decypher.decrypt(decoded_message.get('message'))
                 print(f"message from: {decoded_message.get('from_user')}| {decoded_message.get('message')}")
             except json.decoder.JSONDecodeError:
                 # logger.error("malformed message, exiting")
@@ -126,7 +152,7 @@ class client():
 
 
 # client_port = input("input port: ")
-client_port = 9992
+client_port = 9991
 client = client("localhost", int(client_port), "anon", "password")
 registered = client.register({"aboutme": "bruh"})
 
