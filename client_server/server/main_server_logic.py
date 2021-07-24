@@ -110,6 +110,7 @@ class room_server():
             conn.send(error_response.encode("UTF-8"))
             conn.close()
 
+    @login_required
     def find_user(self, greeting_data, conn):
         if not greeting_data.get('username'):
             error_response = json.dumps(({"status": 400, "alert": "greeting data malformed", "time": datetime.timestamp(datetime.now())}))
