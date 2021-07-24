@@ -62,7 +62,7 @@ class room_server():
         self.running = True
 
     def login_required(func):
-        def token_check(self, greeting_data, conn, *args, **kwargs):
+        def token_check(self, greeting_data, conn):
             if not greeting_data.get("token"):
                 error_response = json.dumps(({"status": 403, "alert": "not logged in", "time": datetime.timestamp(datetime.now())}))
                 conn.send(error_response.encode("UTF-8"))
