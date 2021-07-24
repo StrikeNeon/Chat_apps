@@ -61,6 +61,22 @@ class room_server():
         self.users = {}
         self.running = True
 
+    def login_required(func):
+        def token_check(self, greeting_data, conn, *args, **kwargs):
+            if not greeting_data.get("token"):
+                error_response = json.dumps(({"status": 403, "alert": "not logged in", "time": datetime.timestamp(datetime.now())}))
+                conn.send(error_response.encode("UTF-8"))
+                conn.close()
+                return
+            current_user = db_manager.verify_token(greeting_data.get('token'))
+            if not current_user or current_user["username"] != greeting_data.get('username'):
+                error_response = json.dumps(({"status": 403, "alert": "token error", "time": datetime.timestamp(datetime.now())}))
+                conn.send(error_response.encode("UTF-8"))
+                conn.close()
+                return
+            func(self, greeting_data, conn)
+        return token_check
+
     def register_user(self, greeting_data, conn):
         if not greeting_data.get('username') or not greeting_data.get('password'):
             added = None
@@ -110,6 +126,7 @@ class room_server():
             conn.send(error_response.encode("UTF-8"))
             conn.close()
 
+    @login_required
     def greet(self, greeting_data, conn):
         if not greeting_data.get('username') or not greeting_data.get("target_room"):
             error_response = json.dumps(({"status": 400, "alert": "data malformed", "time": datetime.timestamp(datetime.now())}))
