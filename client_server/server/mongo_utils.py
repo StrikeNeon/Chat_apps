@@ -59,10 +59,10 @@ class mongo_manager():
         self.room_collection.delete_one({"ROOM": room})
         self.db_logger.info(f"deleted records, room № {room}")
 
-    def add_user(self, username, password, user_data):
+    def add_user(self, username, password, about_me):
         user_check = self.user_collection.find_one({"username": username})
         if not user_check:
-            added = self.user_collection.insert_one({"username": username, "password": self.get_password_hash(password), "info": user_data, "contacts": []})
+            added = self.user_collection.insert_one({"username": username, "password": self.get_password_hash(password), "about_me": about_me, "contacts": []})
             return added
         else:
             return None

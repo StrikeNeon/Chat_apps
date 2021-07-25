@@ -74,11 +74,11 @@ class client():
         self.client_socket.close()
         return decoded_response
 
-    def register(self, info_dict):
+    def register(self, about_me):
         self.client_socket = self.make_socket()
         self.client_socket.connect(self.room_service)
         logger.debug(f"connected to room service |{self.client_socket}")
-        greeting = {"action": "REG", "username": self.username, "password": self.password, "info": info_dict, "time":datetime.timestamp(datetime.now())}
+        greeting = {"action": "REG", "username": self.username, "password": self.password, "about_me": about_me, "time":datetime.timestamp(datetime.now())}
         self.client_socket.send(json.dumps(greeting).encode("UTF-8"))
         logger.debug("registration data sent")
         response = self.client_socket.recv(1024)
@@ -154,7 +154,7 @@ class client():
 # client_port = input("input port: ")
 client_port = 9991
 client = client("localhost", int(client_port), "anon", "password")
-registered = client.register({"aboutme": "bruh"})
+registered = client.register("bruh")
 
 token = client.login()
 if token:

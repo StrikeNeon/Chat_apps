@@ -81,7 +81,7 @@ class room_server():
         if not greeting_data.get('username') or not greeting_data.get('password'):
             added = None
         else:
-            added = db_manager.add_user(greeting_data.get('username'), greeting_data.get('password'), greeting_data.get('info'))
+            added = db_manager.add_user(greeting_data.get('username'), greeting_data.get('password'), greeting_data.get('about_me'))
         if not added:
             error_response = json.dumps(({"status": 403, "alert": "already taken", "time": datetime.timestamp(datetime.now())}))
             conn.send(error_response.encode("UTF-8"))
