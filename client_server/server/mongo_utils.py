@@ -97,9 +97,12 @@ class mongo_manager():
         self.db_logger.debug(f"after cleaning {updated}")
         room_zero = self.room_collection.find_one({"ROOM": 0})
         current_users = room_zero.get("Users")
-        current_users.pop(to_delete)
-        self.room_collection.find_one_and_update({"ROOM": 0}, {'$set': {"Users": current_users}})
-        return users, to_delete
+        try:
+            current_users.pop(to_delete)
+            self.room_collection.find_one_and_update({"ROOM": 0}, {'$set': {"Users": current_users}})
+            return users, to_delete
+        except KeyError:
+            return users, None
 
     def delete_user(self, username):
         self.user_collection.delete_one({"username": username})

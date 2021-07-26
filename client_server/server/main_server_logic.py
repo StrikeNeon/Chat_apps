@@ -69,7 +69,8 @@ class room_server():
                 conn.close()
                 return
             current_user = db_manager.verify_token(greeting_data.get('token'))
-            if not current_user or current_user["username"] != greeting_data.get('username'):
+            if not current_user or current_user["username"] != greeting_data.get("username"):
+                self.base_logger.debug(f'{current_user["username"], greeting_data.get("username")}')
                 error_response = json.dumps(({"status": 403, "alert": "token error", "time": datetime.timestamp(datetime.now())}))
                 conn.send(error_response.encode("UTF-8"))
                 conn.close()
@@ -139,12 +140,6 @@ class room_server():
             conn.send(error_response.encode("UTF-8"))
             conn.close()
             self.base_logger.warning(f"non logged in user attempted to enter room|{conn}, data: {greeting_data}")
-        current_user = db_manager.verify_token(greeting_data.get('token'))
-        if not current_user or current_user["username"] != greeting_data.get('username'):
-            error_response = json.dumps(({"status": 403, "alert": "token error", "time": datetime.timestamp(datetime.now())}))
-            conn.send(error_response.encode("UTF-8"))
-            conn.close()
-            self.base_logger.warning(f"token error on user {greeting_data.get('username')}|{conn}, verified: {current_user}")
         self.base_logger.info(f'greetings from {greeting_data.get("username")} {greeting_data}')
         location = greeting_data.get("target_room")
         if location == self.base_port:
