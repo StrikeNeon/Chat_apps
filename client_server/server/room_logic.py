@@ -158,7 +158,7 @@ class room_socket():
             decoded_data = json.loads(data.decode("UTF-8"))
             operation = decoded_data.get("action", None)
             if not operation:
-                error_response = json.dumps(({status:400, "alert": "no operation specified", "time":datetime.timestamp(datetime.now())}))
+                error_response = json.dumps(({"status":400, "alert": "no operation specified", "time":datetime.timestamp(datetime.now())}))
                 connection.send(error_response.encode("UTF-8"))
 
             if operation == "GREETING":
@@ -170,17 +170,28 @@ class room_socket():
                     self.room_logger.warning(f"ip mismatch on user {username}, ip {connection.getpeername()}, ip supplied {user_ip}")
                     error_response = json.dumps(({"status": 403, "alert": ")", "time":datetime.timestamp(datetime.now())}))
                     connection.send(error_response.encode("UTF-8"))
-                if username not in self.users.keys():
-                    self.users[username] = decoded_data.get("user_ip", None)
-                    self.inputs.append(connection)
-                    # Give the connection a queue for data we want to send
-                    self.message_queues[connection.getpeername()] = queue.Queue()
-                    self.room_logger.info(f"new connection {connection.getpeername()}")
-                    error_response = json.dumps(({"status":200, "alert": "user connected", "time":datetime.timestamp(datetime.now())}))
-                    connection.send(error_response.encode("UTF-8"))
                 else:
-                    error_response = json.dumps(({"status": 403, "alert": "non unique username", "time":datetime.timestamp(datetime.now())}))
-                    connection.send(error_response.encode("UTF-8"))
+                    if decoded_data.get("token"):
+                        verification = db_manager.verify_token(decoded_data.get("token"))
+                        if not verification or verification["username"] != decoded_data.get("username"):
+                            error_response = json.dumps(({"status": 403, "alert": "token error", "time":datetime.timestamp(datetime.now())}))
+                            connection.send(error_response.encode("UTF-8"))
+                            pass
+                    else:
+                        error_response = json.dumps(({"status": 403, "alert": "no token supplied", "time":datetime.timestamp(datetime.now())}))
+                        connection.send(error_response.encode("UTF-8"))
+                        pass
+                    if username not in self.users.keys():
+                        self.users[username] = decoded_data.get("user_ip", None)
+                        self.inputs.append(connection)
+                        # Give the connection a queue for data we want to send
+                        self.message_queues[connection.getpeername()] = queue.Queue()
+                        self.room_logger.info(f"new connection {connection.getpeername()}")
+                        error_response = json.dumps(({"action": "alert", "status": 200, "alert": "user connected", "time":datetime.timestamp(datetime.now()), "Users": self.users}))
+                        connection.send(error_response.encode("UTF-8"))
+                    else:
+                        error_response = json.dumps(({"status": 403, "alert": "non unique username", "time":datetime.timestamp(datetime.now())}))
+                        connection.send(error_response.encode("UTF-8"))
 
         else:
             try:
@@ -193,6 +204,8 @@ class room_socket():
                 self.inputs.remove(s)
                 self.room_logger.debug(f"user {s.getpeername()} queue deleted")
                 self.room_logger.debug(f"socket {s.getpeername()} closed")
+                for user in self.message_queues.keys():
+                    self.message_queues[user].put({"action": "alert", "status": 201, "alert": f"User {s.getpeername()} quit", "Users": self.users})
             try:
                 decoded_data = json.loads(data.decode("UTF-8"))
                 self.room_logger.info(f"recieved message from {s.getpeername()}, {decoded_data}")
@@ -217,6 +230,22 @@ class room_socket():
                     # Add output channel for response
                     if s not in self.outputs:
                         self.outputs.append(s)
+                elif operation == "add_to_con":
+                    if not decoded_data.get("username") or not decoded_data.get("add_user"):
+                        error_response = json.dumps(({"status": 400, "alert": "some data was not sent", "time":datetime.timestamp(datetime.now())}))
+                        s.send(error_response.encode("UTF-8"))
+                    else:
+                        db_manager.add_to_contacts(decoded_data.get("username"), decoded_data.get("add_user"))
+                        error_response = json.dumps(({"status": 200, "alert": f"user {decoded_data.get('add_user')} added", "time": datetime.timestamp(datetime.now())}))
+                        s.send(error_response.encode("UTF-8"))
+                elif operation == "remove_from_con":
+                    if not decoded_data.get("username") or not decoded_data.get("remove_user"):
+                        error_response = json.dumps(({"status": 400, "alert": "some data was not sent", "time": datetime.timestamp(datetime.now())}))
+                        s.send(error_response.encode("UTF-8"))
+                    else:
+                        db_manager.add_to_contacts(decoded_data.get("username"), decoded_data.get("remove_user"))
+                        error_response = json.dumps(({"status": 200, "alert": f"user {decoded_data.get('remove_user')} removed", "time": datetime.timestamp(datetime.now())}))
+                        s.send(error_response.encode("UTF-8"))
             except json.decoder.JSONDecodeError:
                 self.room_logger.info(f"malformed message recieved from {s.getpeername()}")
                 error_response = json.dumps(({"status": 500, "alert": "malformed", "time":datetime.timestamp(datetime.now())}))
