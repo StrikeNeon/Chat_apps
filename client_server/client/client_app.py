@@ -38,9 +38,10 @@ class reciever(QObject):
                     structured_message = {"action": "presence", "response": "here", "time": datetime.timestamp(datetime.now())}
                     self.socket.send(json.dumps(structured_message).encode("UTF-8"))
                 # decrypted_message = self.decypher.decrypt(decoded_message.get('message'))
-                elif  decoded_message.get("action", None) == "alert":
+                elif decoded_message.get("action", None) == "alert":
                     if decoded_message.get("status") == 201:
                         updated_users = {self.room: decoded_message.get("Users")}
+                        logger.debug(updated_users)
                         self.recount_users.emit(updated_users)
                 elif decoded_message.get('message') != "":
                     self.recieved_message.emit(f"message from: {decoded_message.get('from_user')}| {decoded_message.get('message')}")
@@ -75,6 +76,8 @@ class client_ui(QtWidgets.QMainWindow, ui.Ui_MainWindow):
         self.send_all_button.clicked.connect(self.send_message)
         self.send_to_user_button.clicked.connect(self.send_message_to_user)
         self.send_quit_message.clicked.connect(self.send_quit)
+        self.add_from_contacts_button.clicked.connect(self.add_to_contacts)
+        self.remove_from_contacts_button.clicked.connect(self.remove_from_contacts)
 
     def make_socket(self):
         client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -154,7 +157,7 @@ class client_ui(QtWidgets.QMainWindow, ui.Ui_MainWindow):
         room = list(users.keys())[0]
         self.active_rooms[room] = users.get(room)
         self.user_choice_box.clear()
-        self.user_choice_box.addItems(self.active_rooms[room].keys())
+        self.user_choice_box.addItems([username for username in self.active_rooms[room].keys() if username != self.username])
 
     def login(self):
         if self.port_input.text():

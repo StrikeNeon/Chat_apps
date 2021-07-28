@@ -137,6 +137,7 @@ class room_socket():
             else:
                 for connection in self.inputs:
                     if connection != self.room_socket:
+                        self.room_logger.debug(f"iterated user {connection.getpeername()}, sought user {next_msg.get('at_user')}")
                         if connection.getpeername() == next_msg.get("at_user"):
                             self.room_logger.debug(f"sent to {s}")
                             connection.send(json.dumps(next_msg).encode("UTF-8"))
@@ -226,7 +227,11 @@ class room_socket():
                             self.room_logger.debug(f"queue for {at_user} {self.message_queues[user].queue}")
                     else:
                         # A readable client socket has data
-                        self.message_queues[at_user].put(decoded_data)
+                        user_loc = self.users.get(at_user)
+                        if user_loc:
+                            self.room_logger.debug(f"sending personal to {user_loc}")
+                            self.room_logger.debug(self.message_queues.keys())
+                            self.message_queues[tuple(user_loc)].put(decoded_data)
                     # Add output channel for response
                     if s not in self.outputs:
                         self.outputs.append(s)
