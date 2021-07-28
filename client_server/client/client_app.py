@@ -253,7 +253,8 @@ class client_ui(QtWidgets.QMainWindow, ui.Ui_MainWindow):
             if 200 >= decoded_response.get("status") < 300:
                 logger.info("connected")
                 self.active_rooms[self.room_number_input.text()] = decoded_response.get("Users")
-
+                users = {self.room_number_input.text(): decoded_response.get("Users")}
+                self.update_users(users)
                 self.reciever_object = reciever(self.client_socket, self.room_number_input.text())
 
                 self.reciever_thread = QThread()
