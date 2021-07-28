@@ -109,8 +109,12 @@ class mongo_manager():
         self.db_logger.info(f"deleted user {username}")
 
     def add_to_contacts(self, username, other_username):
-        updated = self.user_collection.find_one_and_update({"username": username}, {'$push': {"contacts": other_username}}, return_document=ReturnDocument.AFTER)
-        return updated
+        user_contacts = self.user_collection.find_one({"username": username})
+        if other_username not in user_contacts.get("contacts"):
+            updated = self.user_collection.find_one_and_update({"username": username}, {'$push': {"contacts": other_username}}, return_document=ReturnDocument.AFTER)
+            return updated
+        else:
+            return user_contacts
 
     def remove_from_contacts(self, username, other_username):
         updated = self.user_collection.find_one_and_update({"username": username}, {'$pull': {"contacts": other_username}}, return_document=ReturnDocument.AFTER)

@@ -103,7 +103,8 @@ class room_server():
             access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
             access_token = db_manager.create_access_token(data={"sub": user_check["username"]},
                                                           expires_delta=access_token_expires)
-            error_response = json.dumps(({"status": 200, "alert": f"logged {greeting_data.get('username')} in", "token": access_token, "time": datetime.timestamp(datetime.now())}))
+            user_contacts = db_manager.get_contacts(greeting_data.get('username'))
+            error_response = json.dumps(({"status": 200, "alert": f"logged {greeting_data.get('username')} in", "token": access_token, "contacts": user_contacts, "time": datetime.timestamp(datetime.now())}))
             conn.send(error_response.encode("UTF-8"))
             conn.close()
         else:

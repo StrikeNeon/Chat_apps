@@ -159,7 +159,7 @@ class room_socket():
             decoded_data = json.loads(data.decode("UTF-8"))
             operation = decoded_data.get("action", None)
             if not operation:
-                error_response = json.dumps(({"status":400, "alert": "no operation specified", "time":datetime.timestamp(datetime.now())}))
+                error_response = json.dumps(({"status": 400, "alert": "no operation specified", "time": datetime.timestamp(datetime.now())}))
                 connection.send(error_response.encode("UTF-8"))
 
             if operation == "GREETING":
@@ -169,17 +169,17 @@ class room_socket():
                     user_ip[0] = "127.0.0.1"
                 if tuple(user_ip) != connection.getpeername():
                     self.room_logger.warning(f"ip mismatch on user {username}, ip {connection.getpeername()}, ip supplied {user_ip}")
-                    error_response = json.dumps(({"status": 403, "alert": ")", "time":datetime.timestamp(datetime.now())}))
+                    error_response = json.dumps(({"status": 403, "alert": ")", "time": datetime.timestamp(datetime.now())}))
                     connection.send(error_response.encode("UTF-8"))
                 else:
                     if decoded_data.get("token"):
                         verification = db_manager.verify_token(decoded_data.get("token"))
                         if not verification or verification["username"] != decoded_data.get("username"):
-                            error_response = json.dumps(({"status": 403, "alert": "token error", "time":datetime.timestamp(datetime.now())}))
+                            error_response = json.dumps(({"status": 403, "alert": "token error", "time": datetime.timestamp(datetime.now())}))
                             connection.send(error_response.encode("UTF-8"))
                             pass
                     else:
-                        error_response = json.dumps(({"status": 403, "alert": "no token supplied", "time":datetime.timestamp(datetime.now())}))
+                        error_response = json.dumps(({"status": 403, "alert": "no token supplied", "time": datetime.timestamp(datetime.now())}))
                         connection.send(error_response.encode("UTF-8"))
                         pass
                     if username not in self.users.keys():
@@ -188,10 +188,10 @@ class room_socket():
                         # Give the connection a queue for data we want to send
                         self.message_queues[connection.getpeername()] = queue.Queue()
                         self.room_logger.info(f"new connection {connection.getpeername()}")
-                        error_response = json.dumps(({"action": "alert", "status": 200, "alert": "user connected", "time":datetime.timestamp(datetime.now()), "Users": self.users}))
+                        error_response = json.dumps(({"action": "alert", "status": 200, "alert": "user connected", "time": datetime.timestamp(datetime.now()), "Users": self.users}))
                         connection.send(error_response.encode("UTF-8"))
                     else:
-                        error_response = json.dumps(({"status": 403, "alert": "non unique username", "time":datetime.timestamp(datetime.now())}))
+                        error_response = json.dumps(({"status": 403, "alert": "non unique username", "time": datetime.timestamp(datetime.now())}))
                         connection.send(error_response.encode("UTF-8"))
 
         else:

@@ -181,6 +181,7 @@ class client_ui(QtWidgets.QMainWindow, ui.Ui_MainWindow):
                         self.token = decoded_response.get("token")
                         self.username = self.username_input.text()
                         self.password = self.password_input.text()
+                        self.contacts = decoded_response.get("contacts")
                         self.switch_to_room_connector()
                     else:
                         logger.debug(f"response recieved, closing {decoded_response}")
@@ -235,7 +236,7 @@ class client_ui(QtWidgets.QMainWindow, ui.Ui_MainWindow):
         decoded_response = json.loads(response.decode("UTF-8"))
         logger.debug(f"response recieved, closing {decoded_response}")
         self.client_socket.close()
-        
+
         if 200 >= decoded_response.get("status") < 300:
 
             self.client_socket = self.make_socket()
