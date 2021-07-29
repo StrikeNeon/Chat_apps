@@ -13,11 +13,11 @@ import client_ui as ui  # design file
 from loguru import logger
 from datetime import datetime
 from time import sleep
-
+import collections
 
 class reciever(QObject):
     finished = pyqtSignal()
-    recieved_message = pyqtSignal(str)
+    recieved_message = pyqtSignal(tuple)
     recount_users = pyqtSignal(dict)
 
     def __init__(self, socket, room):
@@ -44,7 +44,7 @@ class reciever(QObject):
                         logger.debug(updated_users)
                         self.recount_users.emit(updated_users)
                 elif decoded_message.get('message') != "":
-                    self.recieved_message.emit(f"message from: {decoded_message.get('from_user')}| {decoded_message.get('message')}")
+                    self.recieved_message.emit((self.room, decoded_message.get('from_user'), decoded_message.get('message')))
             except json.decoder.JSONDecodeError:
                 pass
             except ConnectionAbortedError:
@@ -65,6 +65,7 @@ class client_ui(QtWidgets.QMainWindow, ui.Ui_MainWindow):
         self.password = None
         self.token = None
         self.active_rooms = {}
+        self.render_messages = collections.deque([])
 
         self.sign_in_button.clicked.connect(self.login)
         self.register_page_button.clicked.connect(self.switch_to_registration)
@@ -211,7 +212,31 @@ class client_ui(QtWidgets.QMainWindow, ui.Ui_MainWindow):
                 return decoded_response
 
     def add_message(self, message):
-        self.message_output_box.setText(message)
+        try:
+            if type(message) == str:
+                formatted_message = ('\t'*5)+message
+                self.render_messages.append(formatted_message)
+            else:
+                logger.debug(f"{message[1]}")
+                if message[1][0] == "localhost":
+                    message[1][0] = "127.0.0.1"
+                for username, user_loc in self.active_rooms[message[0]].items():
+                    logger.debug(f"{username, user_loc}")
+                    if user_loc == message[1]:
+                        logger.debug("found")
+                        user = username
+                        break
+                if user != self.username:
+                    formatted_message = f"message from: {user}| {message[2]}"
+                    self.render_messages.append(formatted_message)
+        except IndexError:
+            formatted_message = "formatting error"
+            logger.error("formatting error in client")
+            self.render_messages.append(formatted_message)
+        finally:
+            self.message_output_box.setText("\n".join(self.render_messages))
+            if len(self.render_messages) > 20:  # TODO limit needs to be adaptable
+                self.render_messages.popleft()
 
     def signal_to_reciever(self):
         self.reciever_object.connected = False
