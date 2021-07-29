@@ -74,6 +74,9 @@ class client_ui(QtWidgets.QMainWindow, ui.Ui_MainWindow):
         self.login_page_button.clicked.connect(self.switch_to_startpage)
         self.register_button.clicked.connect(self.register)
         self.connect_to_room_button.clicked.connect(self.greet)
+        self.logout_button.clicked.connect(self.logout)
+        self.back_to_room_manager_button.clicked.connect(self.switch_to_room_connector)
+        self.switch_to_contacts_button.clicked.connect(self.switch_to_contacts)
         self.send_all_button.clicked.connect(self.send_message)
         self.send_to_user_button.clicked.connect(self.send_message_to_user)
         self.send_quit_message.clicked.connect(self.send_quit)
@@ -97,6 +100,11 @@ class client_ui(QtWidgets.QMainWindow, ui.Ui_MainWindow):
 
     def switch_to_room_connector(self):
         self.stackedWidget.setCurrentIndex(3)
+
+    def switch_to_contacts(self):
+        self.contact_list_box.clear()
+        self.contact_list_box.addItems(self.contacts)
+        self.stackedWidget.setCurrentIndex(4)
 
     def send_message(self):
         message = self.message_input_box.toPlainText()
@@ -188,6 +196,12 @@ class client_ui(QtWidgets.QMainWindow, ui.Ui_MainWindow):
                         logger.debug(f"response recieved, closing {decoded_response}")
             except ValueError:
                 logger.error("port is not a number")
+
+    def logout(self):
+        self.username = None
+        self.password = None
+        self.token = None
+        self.switch_to_startpage()
 
     def register(self):
         self.client_socket = self.make_socket()
