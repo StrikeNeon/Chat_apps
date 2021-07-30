@@ -133,6 +133,12 @@ class mongo_manager():
             if user_location:
                 return user_location
 
+    def find_user_record(self, username):
+        user_data = self.user_collection.find_one({"username": username})
+        if user_data:
+            info = user_data.get("about_me")
+            return info
+
     def flush_room_zero(self):
         old_room = self.room_collection.find_one({"ROOM": 0})
         if old_room:

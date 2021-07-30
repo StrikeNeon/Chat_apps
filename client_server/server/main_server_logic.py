@@ -130,6 +130,23 @@ class room_server():
             conn.close()
 
     @login_required
+    def get_user_data(self, greeting_data, conn):
+        if not greeting_data.get('username'):
+            error_response = json.dumps(({"status": 400, "alert": "greeting data malformed", "time": datetime.timestamp(datetime.now())}))
+            conn.send(error_response.encode("UTF-8"))
+            conn.close()
+            self.base_logger.warning(f"malformed data at {conn}, data: {greeting_data}")
+        user_check = db_manager.find_user_record(greeting_data.get('username'))
+        if user_check:
+            error_response = json.dumps(({"status": 200, "alert": f"user {greeting_data.get('username')} found", "user_info": user_check, "time": datetime.timestamp(datetime.now())}))
+            conn.send(error_response.encode("UTF-8"))
+            conn.close()
+        else:
+            error_response = json.dumps(({"status": 202, "alert": "user wasn't found", "time": datetime.timestamp(datetime.now())}))
+            conn.send(error_response.encode("UTF-8"))
+            conn.close()
+
+    @login_required
     def greet(self, greeting_data, conn):
         if not greeting_data.get('username') or not greeting_data.get("target_room"):
             error_response = json.dumps(({"status": 400, "alert": "data malformed", "time": datetime.timestamp(datetime.now())}))

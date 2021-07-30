@@ -15,6 +15,7 @@ from datetime import datetime
 from time import sleep
 import collections
 
+
 class reciever(QObject):
     finished = pyqtSignal()
     recieved_message = pyqtSignal(tuple)
@@ -82,6 +83,7 @@ class client_ui(QtWidgets.QMainWindow, ui.Ui_MainWindow):
         self.send_quit_message.clicked.connect(self.send_quit)
         self.add_from_contacts_button.clicked.connect(self.add_to_contacts)
         self.remove_from_contacts_button.clicked.connect(self.remove_from_contacts)
+        self.contact_list_box.currentIndexChanged.connect(self.get_user_info)
 
     def make_socket(self):
         client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -312,6 +314,27 @@ class client_ui(QtWidgets.QMainWindow, ui.Ui_MainWindow):
         else:
             self.client_socket.close()
             logger.error(f"not connected, {decoded_response}")
+
+    def get_user_info(self):
+        self.client_socket = self.make_socket()
+        self.client_socket.connect(self.room_service)
+        greeting = {"action": "get_user_info",
+                    "username": self.username,
+                    "password": self.password,
+                    "target_user": self.contact_list_box.currentText(),
+                    "token": self.token,
+                    "time": datetime.timestamp(datetime.now())}
+        self.client_socket.send(json.dumps(greeting).encode("UTF-8"))
+        logger.debug("greeting sent")
+        response = self.client_socket.recv(1024)
+        decoded_response = json.loads(response.decode("UTF-8"))
+        logger.debug(f"response recieved, closing {decoded_response}")
+        self.client_socket.close()
+        if decoded_response.get("status") == 200:
+            self.user_info_box.setText(decoded_response.get("user_info"))
+        elif decoded_response.get("status") == 202:
+            self.user_info_box.setText("error, user wasn't found")
+            
 
     def closeEvent(self, event):
         logger.info("exiting")
