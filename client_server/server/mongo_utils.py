@@ -126,12 +126,15 @@ class mongo_manager():
             contacts = user_data.get("contacts")
             return contacts
 
-    def find_user(self, username):
+    def find_users(self, usernames):
         users_data = self.room_collection.find_one({"ROOM": 0}).get("Users")
         if users_data:
-            user_location = users_data.get(username)
-            if user_location:
-                return user_location
+            locations = []
+            for user in usernames:
+                user_location = users_data.get(user)
+                if user_location:
+                    locations.append(user_location)
+            return locations
 
     def find_user_record(self, username):
         user_data = self.user_collection.find_one({"username": username})

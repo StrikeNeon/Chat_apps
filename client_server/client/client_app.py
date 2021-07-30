@@ -325,7 +325,7 @@ class client_ui(QtWidgets.QMainWindow, ui.Ui_MainWindow):
                     "token": self.token,
                     "time": datetime.timestamp(datetime.now())}
         self.client_socket.send(json.dumps(greeting).encode("UTF-8"))
-        logger.debug("greeting sent")
+        logger.debug("data sent")
         response = self.client_socket.recv(1024)
         decoded_response = json.loads(response.decode("UTF-8"))
         logger.debug(f"response recieved, closing {decoded_response}")
@@ -334,7 +334,24 @@ class client_ui(QtWidgets.QMainWindow, ui.Ui_MainWindow):
             self.user_info_box.setText(decoded_response.get("user_info"))
         elif decoded_response.get("status") == 202:
             self.user_info_box.setText("error, user wasn't found")
-            
+
+    def find_contacts(self):
+        self.client_socket = self.make_socket()
+        self.client_socket.connect(self.room_service)
+        greeting = {"action": "get_contact_locations",
+                    "username": self.username,
+                    "password": self.password,
+                    "contacts": self.contacts,
+                    "token": self.token,
+                    "time": datetime.timestamp(datetime.now())}
+        self.client_socket.send(json.dumps(greeting).encode("UTF-8"))
+        logger.debug("data sent")
+        response = self.client_socket.recv(1024)
+        decoded_response = json.loads(response.decode("UTF-8"))
+        logger.debug(f"response recieved, closing {decoded_response}")
+        self.client_socket.close()
+        if decoded_response.get("status") == 200:
+            self.contacts_box.setText("\n".join(decoded_response.get("locations")))
 
     def closeEvent(self, event):
         logger.info("exiting")

@@ -113,15 +113,15 @@ class room_server():
             conn.close()
 
     @login_required
-    def find_user(self, greeting_data, conn):
-        if not greeting_data.get('username'):
+    def find_users(self, greeting_data, conn):
+        if not greeting_data.get('contacts'):
             error_response = json.dumps(({"status": 400, "alert": "greeting data malformed", "time": datetime.timestamp(datetime.now())}))
             conn.send(error_response.encode("UTF-8"))
             conn.close()
             self.base_logger.warning(f"malformed data at {conn}, data: {greeting_data}")
-        user_check = db_manager.find_user(greeting_data.get('username'))
+        user_check = db_manager.find_users(greeting_data.get('contacts'))
         if user_check:
-            error_response = json.dumps(({"status": 200, "alert": f"user {greeting_data.get('username')} found", "location": user_check, "time": datetime.timestamp(datetime.now())}))
+            error_response = json.dumps(({"status": 200, "alert": f"users found", "locations": user_check, "time": datetime.timestamp(datetime.now())}))
             conn.send(error_response.encode("UTF-8"))
             conn.close()
         else:
@@ -215,8 +215,10 @@ class room_server():
                         self.greet(greeting_data, conn)
                     elif operation == "REG":
                         self.register_user(greeting_data, conn)
-                    elif operation == "find":
-                        self.find_user(greeting_data, conn)
+                    elif operation == "get_contact_locations":
+                        self.find_users(greeting_data, conn)
+                    elif operation == "get_user_info":
+                        self.get_user_data(greeting_data, conn)
                 else:
                     error_response = json.dumps(({"status": 400, "alert": "no operation specified", "time": datetime.timestamp(datetime.now())}))
                     conn.send(error_response.encode("UTF-8"))
