@@ -141,8 +141,12 @@ class room_server():
             error_response = json.dumps(({"status": 200, "alert": f"user {greeting_data.get('username')} found", "user_info": user_check, "time": datetime.timestamp(datetime.now())}))
             conn.send(error_response.encode("UTF-8"))
             conn.close()
-        else:
-            error_response = json.dumps(({"status": 202, "alert": "user wasn't found", "time": datetime.timestamp(datetime.now())}))
+        elif user_check == 404:
+            error_response = json.dumps(({"status": 404, "alert": "no user found", "time": datetime.timestamp(datetime.now())}))
+            conn.send(error_response.encode("UTF-8"))
+            conn.close()
+        elif not user_check:
+            error_response = json.dumps(({"status": 202, "alert": "user submitted no info", "time": datetime.timestamp(datetime.now())}))
             conn.send(error_response.encode("UTF-8"))
             conn.close()
 

@@ -84,6 +84,7 @@ class client_ui(QtWidgets.QMainWindow, ui.Ui_MainWindow):
         self.add_from_contacts_button.clicked.connect(self.add_to_contacts)
         self.remove_from_contacts_button.clicked.connect(self.remove_from_contacts)
         self.contact_list_box.currentIndexChanged.connect(self.get_user_info)
+        self.ping_contacts_button.clicked.connect(self.find_contacts)
 
     def make_socket(self):
         client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -333,6 +334,8 @@ class client_ui(QtWidgets.QMainWindow, ui.Ui_MainWindow):
         if decoded_response.get("status") == 200:
             self.user_info_box.setText(decoded_response.get("user_info"))
         elif decoded_response.get("status") == 202:
+            self.user_info_box.setText("user has no info")
+        elif decoded_response.get("status") == 404:
             self.user_info_box.setText("error, user wasn't found")
 
     def find_contacts(self):
@@ -352,6 +355,8 @@ class client_ui(QtWidgets.QMainWindow, ui.Ui_MainWindow):
         self.client_socket.close()
         if decoded_response.get("status") == 200:
             self.contacts_box.setText("\n".join(decoded_response.get("locations")))
+        elif decoded_response.get("status") == 202:
+            self.contacts_box.setText("none are in rooms")
 
     def closeEvent(self, event):
         logger.info("exiting")

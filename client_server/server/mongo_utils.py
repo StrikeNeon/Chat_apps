@@ -128,12 +128,14 @@ class mongo_manager():
 
     def find_users(self, usernames):
         users_data = self.room_collection.find_one({"ROOM": 0}).get("Users")
+        self.db_logger.debug("user found")
         if users_data:
             locations = []
             for user in usernames:
                 user_location = users_data.get(user)
                 if user_location:
-                    locations.append(user_location)
+                    locations.append(str(user_location))
+            self.db_logger.debug(locations)
             return locations
 
     def find_user_record(self, username):
@@ -141,6 +143,8 @@ class mongo_manager():
         if user_data:
             info = user_data.get("about_me")
             return info
+        else:
+            return 404
 
     def flush_room_zero(self):
         old_room = self.room_collection.find_one({"ROOM": 0})
