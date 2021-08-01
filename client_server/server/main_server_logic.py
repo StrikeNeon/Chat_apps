@@ -151,6 +151,19 @@ class room_server():
             conn.close()
 
     @login_required
+    def get_room_data(self, greeting_data, conn):
+        room_data = db_manager.get_room_data()
+        if room_data:
+            error_response = json.dumps(({"status": 200, "alert": "room data retrieved", "room_data": room_data, "time": datetime.timestamp(datetime.now())}))
+            conn.send(error_response.encode("UTF-8"))
+            conn.close()
+        elif room_data == 500:
+            error_response = json.dumps(({"status": 500, "alert": "server error", "time": datetime.timestamp(datetime.now())}))
+            conn.send(error_response.encode("UTF-8"))
+            conn.close()
+    # TODO add query to get all active rooms and display room text and user count
+
+    @login_required
     def greet(self, greeting_data, conn):
         if not greeting_data.get('username') or not greeting_data.get("target_room"):
             error_response = json.dumps(({"status": 400, "alert": "data malformed", "time": datetime.timestamp(datetime.now())}))
@@ -223,6 +236,8 @@ class room_server():
                         self.find_users(greeting_data, conn)
                     elif operation == "get_user_info":
                         self.get_user_data(greeting_data, conn)
+                    elif operation == "get_room_data":
+                        self.get_room_data(greeting_data, conn)
                 else:
                     error_response = json.dumps(({"status": 400, "alert": "no operation specified", "time": datetime.timestamp(datetime.now())}))
                     conn.send(error_response.encode("UTF-8"))

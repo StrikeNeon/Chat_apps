@@ -146,6 +146,16 @@ class mongo_manager():
         else:
             return 404
 
+    def get_room_data(self):
+        rooms = self.room_collection.find({"ROOM": {"$ne":0}})
+        if rooms:
+            room_data = {}
+            for room in rooms:
+                room_data[room.get("ROOM")] = len(room.get("Users"))
+            return room_data
+        else:
+            return 500
+
     def flush_room_zero(self):
         old_room = self.room_collection.find_one({"ROOM": 0})
         if old_room:
@@ -154,3 +164,5 @@ class mongo_manager():
         else:
             self.room_collection.insert_one({"ROOM": 0, "Blacklist": [], "Whitelist": [], "Users": {}})
             self.db_logger.info("created room records, room 0")
+
+    # TODO add query to get all active rooms and display room text and user count

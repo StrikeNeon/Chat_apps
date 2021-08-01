@@ -85,10 +85,11 @@ class client_ui(QtWidgets.QMainWindow, ui.Ui_MainWindow):
         self.remove_from_contacts_button.clicked.connect(self.remove_from_contacts)
         self.contact_list_box.currentIndexChanged.connect(self.get_user_info)
         self.ping_contacts_button.clicked.connect(self.find_contacts)
+        self.refresh_rooms_button.clicked.connect(self.refresh_rooms)
 
     def make_socket(self):
         client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        client_socket.bind(('', self.port))
+        # client_socket.bind(('', self.port))
         logger.debug(f"made socket |{client_socket}")
         return client_socket
 
@@ -115,7 +116,7 @@ class client_ui(QtWidgets.QMainWindow, ui.Ui_MainWindow):
             # encrypted_message = self.cypher.encrypt(bytes(message, encoding="utf-8"))
             structured_message = {"action": "MESSAGE",
                                   "at_user": "all",
-                                  "from_user": (self.ip, self.port),
+                                  "from_user": list(self.client_socket.getsockname()),
                                   "message": message,
                                   "time": datetime.timestamp(datetime.now())}
             self.client_socket.send(json.dumps(structured_message).encode("UTF-8"))
@@ -128,7 +129,7 @@ class client_ui(QtWidgets.QMainWindow, ui.Ui_MainWindow):
             # encrypted_message = self.cypher.encrypt(bytes(message, encoding="utf-8"))
             structured_message = {"action": "MESSAGE",
                                   "at_user": user,
-                                  "from_user": (self.ip, self.port),
+                                  "from_user": list(self.client_socket.getsockname()),
                                   "message": message,
                                   "time": datetime.timestamp(datetime.now())}
             self.client_socket.send(json.dumps(structured_message).encode("UTF-8"))
@@ -238,7 +239,7 @@ class client_ui(QtWidgets.QMainWindow, ui.Ui_MainWindow):
                 if message[1][0] == "localhost":
                     message[1][0] = "127.0.0.1"
                 for username, user_loc in self.active_rooms[message[0]].items():
-                    logger.debug(f"{username, user_loc}")
+                    logger.debug(f"{username, user_loc}, {message[1]}")
                     if user_loc == message[1]:
                         logger.debug("found")
                         user = username
@@ -246,7 +247,7 @@ class client_ui(QtWidgets.QMainWindow, ui.Ui_MainWindow):
                 if user != self.username:
                     formatted_message = f"message from: {user}| {message[2]}"
                     self.render_messages.append(formatted_message)
-        except IndexError:
+        except (IndexError, UnboundLocalError):
             formatted_message = "formatting error"
             logger.error("formatting error in client")
             self.render_messages.append(formatted_message)
@@ -286,7 +287,7 @@ class client_ui(QtWidgets.QMainWindow, ui.Ui_MainWindow):
             greeting = {"action": "GREETING",
                         "username": self.username,
                         "token": self.token,
-                        "user_ip": [self.ip, self.port],
+                        "user_ip": list(self.client_socket.getsockname()),
                         "time": datetime.timestamp(datetime.now())}
             self.client_socket.send(json.dumps(greeting).encode("UTF-8"))
             logger.debug("greeting sent")
@@ -295,6 +296,8 @@ class client_ui(QtWidgets.QMainWindow, ui.Ui_MainWindow):
             if 200 >= decoded_response.get("status") < 300:
                 logger.info("connected")
                 self.active_rooms[self.room_number_input.text()] = decoded_response.get("Users")
+                self.current_rooms_box.clear()
+                self.current_rooms_box.setText("\n".join(self.active_rooms.keys()))
                 users = {self.room_number_input.text(): decoded_response.get("Users")}
                 self.update_users(users)
                 self.reciever_object = reciever(self.client_socket, self.room_number_input.text())
@@ -357,6 +360,26 @@ class client_ui(QtWidgets.QMainWindow, ui.Ui_MainWindow):
             self.contacts_box.setText("\n".join(decoded_response.get("locations")))
         elif decoded_response.get("status") == 202:
             self.contacts_box.setText("none are in rooms")
+
+    def refresh_rooms(self):
+        self.client_socket = self.make_socket()
+        self.client_socket.connect(self.room_service)
+        greeting = {"action": "get_room_data",
+                    "username": self.username,
+                    "token": self.token,
+                    "time": datetime.timestamp(datetime.now())}
+        self.client_socket.send(json.dumps(greeting).encode("UTF-8"))
+        logger.debug("data sent")
+        response = self.client_socket.recv(1024)
+        decoded_response = json.loads(response.decode("UTF-8"))
+        logger.debug(f"response recieved, closing {decoded_response}")
+        self.client_socket.close()
+        if decoded_response.get("status") == 200:
+            rooms = [f"room {key}: users online {value}" for key, value in decoded_response.get("room_data").items()]
+            self.room_browser_box.setText("\n".join(rooms))
+        elif decoded_response.get("status") == 500:
+            self.room_browser_box.setText("an error has occured serverside")
+    # TODO add room browser refresher
 
     def closeEvent(self, event):
         logger.info("exiting")

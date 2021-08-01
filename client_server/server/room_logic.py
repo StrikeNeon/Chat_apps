@@ -190,7 +190,7 @@ class room_socket():
                         self.room_logger.info(f"new connection {connection.getpeername()}")
                         error_response = json.dumps(({"action": "alert", "status": 200, "alert": "user connected", "time": datetime.timestamp(datetime.now()), "Users": self.users}))
                         connection.send(error_response.encode("UTF-8"))
-                        
+
                     else:
                         error_response = json.dumps(({"status": 403, "alert": "non unique username", "time": datetime.timestamp(datetime.now())}))
                         connection.send(error_response.encode("UTF-8"))
