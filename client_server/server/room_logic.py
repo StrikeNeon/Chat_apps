@@ -243,13 +243,15 @@ class room_socket():
                     else:
                         db_manager.add_to_contacts(decoded_data.get("username"), decoded_data.get("add_user"))
                         error_response = json.dumps(({"status": 200, "alert": f"user {decoded_data.get('add_user')} added", "time": datetime.timestamp(datetime.now())}))
+                        self.room_logger.debug(error_response)
                         s.send(error_response.encode("UTF-8"))
                 elif operation == "remove_from_con":
                     if not decoded_data.get("username") or not decoded_data.get("remove_user"):
                         error_response = json.dumps(({"status": 400, "alert": "some data was not sent", "time": datetime.timestamp(datetime.now())}))
                         s.send(error_response.encode("UTF-8"))
                     else:
-                        db_manager.add_to_contacts(decoded_data.get("username"), decoded_data.get("remove_user"))
+                        db_manager.remove_from_contacts(decoded_data.get("username"), decoded_data.get("remove_user"))
+                        self.room_logger.debug(error_response)
                         error_response = json.dumps(({"status": 200, "alert": f"user {decoded_data.get('remove_user')} removed", "time": datetime.timestamp(datetime.now())}))
                         s.send(error_response.encode("UTF-8"))
             except json.decoder.JSONDecodeError:

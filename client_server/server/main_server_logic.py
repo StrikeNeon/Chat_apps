@@ -161,7 +161,6 @@ class room_server():
             error_response = json.dumps(({"status": 500, "alert": "server error", "time": datetime.timestamp(datetime.now())}))
             conn.send(error_response.encode("UTF-8"))
             conn.close()
-    # TODO add query to get all active rooms and display room text and user count
 
     @login_required
     def greet(self, greeting_data, conn):

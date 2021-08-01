@@ -251,6 +251,8 @@ class client_ui(QtWidgets.QMainWindow, ui.Ui_MainWindow):
             formatted_message = "formatting error"
             logger.error("formatting error in client")
             self.render_messages.append(formatted_message)
+        except TypeError:
+            pass
         finally:
             self.message_output_box.setText("\n".join(self.render_messages))
             if len(self.render_messages) > 20:  # TODO limit needs to be adaptable
@@ -379,7 +381,6 @@ class client_ui(QtWidgets.QMainWindow, ui.Ui_MainWindow):
             self.room_browser_box.setText("\n".join(rooms))
         elif decoded_response.get("status") == 500:
             self.room_browser_box.setText("an error has occured serverside")
-    # TODO add room browser refresher
 
     def closeEvent(self, event):
         logger.info("exiting")
