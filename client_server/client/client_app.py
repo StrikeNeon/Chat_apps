@@ -58,7 +58,7 @@ class client_ui(QtWidgets.QMainWindow, ui.Ui_MainWindow):
         # Это здесь нужно для доступа к переменным, методам
         # и т.д. в файле design.py
         super().__init__()
-        self.room_service = ("127.0.0.1", 6661)
+        self.room_service = ("192.168.56.1", 6661)
         self.ip = "localhost"
         self.port = 9991
         self.setupUi(self)  # Это нужно для инициализации нашего дизайна
