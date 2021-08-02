@@ -62,10 +62,11 @@ class main_reciever(QObject):
         self.base_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.base_host_name = socket.gethostname()
         self.base_ip = socket.gethostbyname(self.base_host_name)
+        self.base_port = port
 
-        self.base_socket.bind((self.base_ip, 6661))
+        self.base_socket.bind((self.base_ip, self.base_port))
         self.base_logger.info("Binding successful!")
-        self.base_logger.info(f"Base server bound to: {self.base_ip}:{6661}")
+        self.base_logger.info(f"Base server bound to: {self.base_ip}:{self.base_port}")
 
         self.base_socket.listen(100)
         self.base_logger.info(f"Base server limit set at {100}")
