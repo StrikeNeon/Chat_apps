@@ -203,6 +203,17 @@ class main_reciever(QObject):
                 self.base_logger.debug("no room found, creating")
                 room_response = json.dumps(({"status": 201, "alert": "no room found, opening new", "time": datetime.timestamp(datetime.now())}))
                 conn.send(room_response.encode("UTF-8"))
+                # TODO slot call to room object here
+
+                # self.reciever_thread = QThread()
+                # self.close_room_button.clicked.connect(self.close_server)
+                # self.reciever_object.send_rooms.connect(self.render_rooms)
+                # self.reciever_object.send_users.connect(self.render_users)
+                # self.reciever_object.moveToThread(self.reciever_thread)
+                # self.reciever_object.finished.connect(self.reciever_thread.quit)
+                # self.reciever_thread.started.connect(self.reciever_object.start)
+                # self.reciever_thread.start()
+
                 room_thread = Thread(target=self.open_room, args=([location]))
                 room_thread.start()
                 self.rooms.append((room_thread, location))
@@ -216,6 +227,17 @@ class main_reciever(QObject):
                         self.base_logger.info(f"allowed user {greeting_data.get('username')} to connect to room {location}")
                     else:
                         self.base_logger.info(f"recreated room {location}")
+                        # TODO slot call to room object here
+                
+                        # reciever_thread = QThread()
+                        # self.close_room_button.clicked.connect(self.close_server)
+                        # self.reciever_object.send_rooms.connect(self.render_rooms)
+                        # self.reciever_object.send_users.connect(self.render_users)
+                        # self.reciever_object.moveToThread(self.reciever_thread)
+                        # self.reciever_object.finished.connect(self.reciever_thread.quit)
+                        # self.reciever_thread.started.connect(self.reciever_object.start)
+                        # self.reciever_thread.start()
+
                         room_thread = Thread(target=self.open_room, args=([location]))
                         room_thread.start()
                         self.rooms.append((room_thread, location))
@@ -307,10 +329,10 @@ class administration_ui(QtWidgets.QMainWindow, ui.Ui_MainWindow):
             sys.exit(1)
 
     def render_users(self, users):
-        self.log_box.setText("\n".join([f"user {key} in {value}" for key, value in users.items()]))
+        self.room_zero_tab.log_box.setText("\n".join([f"user {key} in {value}" for key, value in users.items()]))
 
     def render_rooms(self, rooms):
-        self.user_counter.setNumDigits(len(rooms))
+        self.room_zero_tab.user_counter.setNumDigits(len(rooms))
 
     def close_server(self):
         self.reciever_object.running = False
@@ -322,7 +344,7 @@ class administration_ui(QtWidgets.QMainWindow, ui.Ui_MainWindow):
         self.reciever_object = main_reciever(ip="127.0.0.1")
 
         self.reciever_thread = QThread()
-        self.close_room_button.clicked.connect(self.close_server)
+        self.room_zero_tab.close_room_button.clicked.connect(self.close_server)
         self.reciever_object.send_rooms.connect(self.render_rooms)
         self.reciever_object.send_users.connect(self.render_users)
         self.reciever_object.moveToThread(self.reciever_thread)
