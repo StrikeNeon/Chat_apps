@@ -54,7 +54,7 @@ class room_socket(QObject):
         self.room_ip = ip
 
         self.room_port = port
-
+        self.room_logger.debug((self.room_ip, self.room_port))
         self.room_socket.bind((self.room_ip, self.room_port))
         self.room_logger.info("Binding successful!")
         self.room_logger.info(f"Base server bound to: {self.room_ip}:{self.room_port}")
@@ -128,12 +128,6 @@ class room_socket(QObject):
             for s in exceptional:
                 self.handle_error(s)
             sleep(0.2)
-        self.room_logger.debug("room loop exited")
-        self.schedule_event.set()
-        self.room_logger.debug("event running stopped")
-        self.room_logger.info(f"room {self.room_port} closing")
-        self.room_socket.close()
-        self.finished.emit()
 
     def send_data(self, s):
         self.room_logger.debug(f"sending message to {s.getpeername()}")
@@ -284,3 +278,12 @@ class room_socket(QObject):
 
         # Remove message queue
         del self.message_queues[deleted_user]
+
+    def close_server(self):
+        self.active = False
+        self.room_logger.debug("room loop exited")
+        self.schedule_event.set()
+        self.room_logger.debug("event running stopped")
+        self.room_socket.close()
+        self.finished.emit()
+        self.room_logger.info(f"room {self.room_port} finished")

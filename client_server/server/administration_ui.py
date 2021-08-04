@@ -57,7 +57,7 @@ class Ui_MainWindow(object):
         self.room_manager.setObjectName("room_manager")
         self.room_zero_tab = room_tab(self.room_manager)
 
-        self.room_manager.addTab(self.room_zero_tab, "")
+        self.room_manager.addTab(self.room_zero_tab, "room_zero_tab")
         self.db_reconnect_button = QtWidgets.QPushButton(self.room_management_page)
         self.db_reconnect_button.setGeometry(QtCore.QRect(20, 450, 101, 23))
         self.db_reconnect_button.setObjectName("db_reconnect_button")
