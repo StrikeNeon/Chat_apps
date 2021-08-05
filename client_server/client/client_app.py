@@ -278,10 +278,10 @@ class client_ui(QtWidgets.QMainWindow, ui.Ui_MainWindow):
                     "time": datetime.timestamp(datetime.now())}
         self.client_socket.send(json.dumps(greeting).encode("UTF-8"))
         logger.debug("greeting sent")
-        try:
-            response = self.client_socket.recv(1024)
-        except ConnectionResetError:
-            return
+        # try:
+        response = self.client_socket.recv(1024)
+        # except ConnectionResetError:
+            # return
         decoded_response = json.loads(response.decode("UTF-8"))
         logger.debug(f"response recieved, closing {decoded_response}")
         self.client_socket.close()
@@ -289,6 +289,7 @@ class client_ui(QtWidgets.QMainWindow, ui.Ui_MainWindow):
         if 200 >= decoded_response.get("status") < 300:
 
             self.client_socket = self.make_socket()
+            logger.debug((self.room_service[0], int(self.room_number_input.text())))
             self.client_socket.connect((self.room_service[0], int(self.room_number_input.text())))
             greeting = {"action": "GREETING",
                         "username": self.username,
@@ -297,7 +298,10 @@ class client_ui(QtWidgets.QMainWindow, ui.Ui_MainWindow):
                         "time": datetime.timestamp(datetime.now())}
             self.client_socket.send(json.dumps(greeting).encode("UTF-8"))
             logger.debug("greeting sent")
+            # try:
             response = self.client_socket.recv(1024)
+            # except ConnectionResetError:
+            #     return
             decoded_response = json.loads(response.decode("UTF-8"))
             if 200 >= decoded_response.get("status") < 300:
                 logger.info("connected")

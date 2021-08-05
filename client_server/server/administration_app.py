@@ -10,7 +10,7 @@ from mongo_utils import mongo_manager
 from datetime import datetime, timedelta
 from settings import ACCESS_TOKEN_EXPIRE_MINUTES
 from simplejson.errors import JSONDecodeError
-from PyQt5 import QtWidgets, QtWebSockets, QtGui
+from PyQt5 import QtWidgets, QtWebSockets, QtGui, QtCore
 from PyQt5.QtCore import (
     QObject,
     pyqtSignal,
@@ -22,6 +22,7 @@ from settings import ADMIN_LOGIN, ADMIN_PASSWORD
 from loguru import logger
 
 db_manager = mongo_manager()
+_translate = QtCore.QCoreApplication.translate # this is here to translate ui dynamically
 
 def run_continuously(interval=1):
     """Continuously run, while executing pending jobs at each
@@ -203,22 +204,17 @@ class main_reciever(QObject):
                 self.base_logger.debug("no room found, creating")
                 room_response = json.dumps(({"status": 201, "alert": "no room found, opening new", "time": datetime.timestamp(datetime.now())}))
                 conn.send(room_response.encode("UTF-8"))
-                # TODO slot call to room object here
-
-                reciever_object = room_socket(ip=self.base_ip, port=location)
-                new_room = ui.room_tab(self.room_manager)
-                self.room_manager.addTab(new_room, f'room_{location}_tab')
-                reciever_thread = QThread()
-                new_room.close_room_button.clicked.connect(reciever_object.close_server)
-                reciever_object.send_users.connect(self.send_users.emit(self.users))
-                reciever_object.moveToThread(reciever_thread)
-                reciever_object.finished.connect(reciever_thread.quit)
-                reciever_thread.started.connect(reciever_object.room_loop)
-                reciever_thread.start()
-                self.rooms.append((reciever_object, location))
+                self.users[greeting_data.get('username')] = location
+                self.rooms.append(location)
+                db_manager.add_user_to_room(conn.getpeername(), greeting_data.get('username'), location, self.users)
+                self.users[greeting_data.get('username')] = location
+                conn.send(room_response.encode("UTF-8"))
+                self.send_users.emit(self.users)
                 self.send_rooms.emit(self.rooms)
                 conn.close()
-
+                # self.base_logger.debug("no room found, creating")
+                # room_response = json.dumps(({"status": 201, "alert": "no room found, opening new", "time": datetime.timestamp(datetime.now())}))
+                # conn.send(room_response.encode("UTF-8"))
                 # room_thread = Thread(target=self.open_room, args=([location]))
                 # room_thread.start()
                 # self.rooms.append((room_thread, location))
@@ -232,37 +228,22 @@ class main_reciever(QObject):
                         self.base_logger.info(f"allowed user {greeting_data.get('username')} to connect to room {location}")
                     else:
                         self.base_logger.info(f"recreated room {location}")
-                        # TODO slot call to room object here
-
-                        reciever_object = room_socket(ip=self.base_ip, port=location)
-                        new_room = ui.room_tab(self.room_manager)
-                        self.room_manager.addTab(new_room, f'room_{location}_tab')
-                        reciever_thread = QThread()
-                        new_room.close_room_button.clicked.connect(reciever_object.close_server)
-                        reciever_object.send_users.connect(self.send_users.emit(self.users))
-                        reciever_object.moveToThread(reciever_thread)
-                        reciever_object.finished.connect(reciever_thread.quit)
-                        reciever_thread.started.connect(reciever_object.room_loop)
-                        reciever_thread.start()
-                        self.rooms.append((reciever_thread, location))
-                        self.send_rooms.emit(self.rooms)
-                        conn.close()
-
-                        # room_thread = Thread(target=self.open_room, args=([location]))
-                        # room_thread.start()
-                        # self.rooms.append((room_thread, location))
-                        # self.send_rooms.emit(self.rooms)
+                        self.rooms.append(location)
                     self.base_logger.info(f"allowed user {greeting_data.get('username')} to connect to room {location}")
-                    self.users[greeting_data.get('username')] = location
-                    self.send_users.emit(self.users)
                     db_manager.add_user_to_room(conn.getpeername(), greeting_data.get('username'), location, self.users)
+                    self.users[greeting_data.get('username')] = location
                     conn.send(error_response.encode("UTF-8"))
+                    self.send_rooms.emit(self.rooms)
+                    self.send_users.emit(self.users)
                     conn.close()
                 else:
                     error_response = json.dumps(({"status": 404, "alert": "no room found", "time": datetime.timestamp(datetime.now())}))
                     conn.send(error_response.encode("UTF-8"))
                     conn.close()
                     self.base_logger.warning("user blacklisted")
+
+    def send_user_signal(self):
+        self.send_users.emit(self.users)
 
     def open_room(self, port):
         room = room_socket(self.base_ip, port)
@@ -322,9 +303,10 @@ class administration_ui(QtWidgets.QMainWindow, ui.Ui_MainWindow):
         # Это здесь нужно для доступа к переменным, методам
         # и т.д. в файле design.py
         super().__init__()
-        self.setupUi(self)  # Это нужно для инициализации нашего дизайна
+        self.setupUi(self)
         self.username = None
         self.password = None
+        self.rooms = []
 
         self.start_server.clicked.connect(self.login)
         # self.db_reconnect_button.clicked.connect(self.reconnect_mongo)
@@ -343,6 +325,26 @@ class administration_ui(QtWidgets.QMainWindow, ui.Ui_MainWindow):
 
     def render_rooms(self, rooms):
         self.room_zero_tab.user_counter.setNumDigits(len(rooms))
+
+        location = rooms[-1]
+        reciever_object = room_socket(ip=self.reciever_object.base_ip, port=location)
+        new_room = ui.room_tab(self.room_manager)
+
+        new_room.close_room_button.setText(_translate("MainWindow", "close room"))
+        new_room.room_num_lable.setText(_translate("MainWindow", "room_num"))
+        new_room.user_counter_lable.setText(_translate("MainWindow", "users online"))
+        new_room.room_num_placeholder.setText(_translate("MainWindow", "placeholder_num"))
+        new_room.label.setText(_translate("MainWindow", "room load"))
+
+        self.room_manager.addTab(new_room, f'room_{location}_tab')
+        reciever_thread = QThread()
+        new_room.close_room_button.clicked.connect(reciever_object.close_server)
+        # reciever_object.send_users.connect(self.send_user_signal)
+        reciever_object.moveToThread(reciever_thread)
+        reciever_object.finished.connect(reciever_thread.quit)
+        reciever_thread.started.connect(reciever_object.room_loop)
+        reciever_thread.start()
+        self.rooms.append((reciever_thread, reciever_object))
 
     def close_server(self):
         self.reciever_object.running = False

@@ -55,16 +55,15 @@ class room_socket(QObject):
         self.room_ip = ip
 
         self.room_port = port
-        self.room_logger.debug((self.room_ip, self.room_port))
         self.room_socket.bind((self.room_ip, self.room_port))
         self.room_logger.info("Binding successful!")
-        self.room_logger.info(f"Base server bound to: {self.room_ip}:{self.room_port}")
+        self.room_logger.info(f"room bound to: {self.room_ip}:{self.room_port}")
 
         self.room_socket.listen(limit)
         self.inputs = [self.room_socket]
         self.outputs = []
         self.message_queues = {}
-        self.room_logger.info(f"Base server limit set at {limit}")
+        self.room_logger.info(f"room limit set at {limit}")
         self.message_queues["all"] = queue.Queue()
         self.users = {}
         self.active = True
@@ -115,6 +114,7 @@ class room_socket(QObject):
         schedule.every(5).minutes.do(self.presence)
         schedule.every(1).minutes.do(self.cleanup)
         self.schedule_event = run_continuously()
+        self.room_logger.info(f"room {self.room_port} open")
         while self.active:
             readable, writable, exceptional = select.select(self.inputs, self.outputs, self.inputs)
             # Handle inputs
@@ -190,6 +190,7 @@ class room_socket(QObject):
                         pass
                     if username not in self.users.keys():
                         self.users[username] = decoded_data.get("user_ip", None)
+                        self.send_users.emit(self.users)
                         self.inputs.append(connection)
                         # Give the connection a queue for data we want to send
                         self.message_queues[connection.getpeername()] = queue.Queue()
