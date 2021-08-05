@@ -325,26 +325,29 @@ class administration_ui(QtWidgets.QMainWindow, ui.Ui_MainWindow):
 
     def render_rooms(self, rooms):
         self.room_zero_tab.user_counter.setNumDigits(len(rooms))
+        if len(rooms) != len(self.rooms):
+            location = rooms[-1]
+            try:
+                reciever_object = room_socket(ip=self.reciever_object.base_ip, port=location)
+                new_room = ui.room_tab(self.room_manager)
 
-        location = rooms[-1]
-        reciever_object = room_socket(ip=self.reciever_object.base_ip, port=location)
-        new_room = ui.room_tab(self.room_manager)
+                new_room.close_room_button.setText(_translate("MainWindow", "close room"))
+                new_room.room_num_lable.setText(_translate("MainWindow", "room_num"))
+                new_room.user_counter_lable.setText(_translate("MainWindow", "users online"))
+                new_room.room_num_placeholder.setText(_translate("MainWindow", "placeholder_num"))
+                new_room.label.setText(_translate("MainWindow", "room load"))
 
-        new_room.close_room_button.setText(_translate("MainWindow", "close room"))
-        new_room.room_num_lable.setText(_translate("MainWindow", "room_num"))
-        new_room.user_counter_lable.setText(_translate("MainWindow", "users online"))
-        new_room.room_num_placeholder.setText(_translate("MainWindow", "placeholder_num"))
-        new_room.label.setText(_translate("MainWindow", "room load"))
-
-        self.room_manager.addTab(new_room, f'room_{location}_tab')
-        reciever_thread = QThread()
-        new_room.close_room_button.clicked.connect(reciever_object.close_server)
-        # reciever_object.send_users.connect(self.send_user_signal)
-        reciever_object.moveToThread(reciever_thread)
-        reciever_object.finished.connect(reciever_thread.quit)
-        reciever_thread.started.connect(reciever_object.room_loop)
-        reciever_thread.start()
-        self.rooms.append((reciever_thread, reciever_object))
+                self.room_manager.addTab(new_room, f'room_{location}_tab')
+                reciever_thread = QThread()
+                new_room.close_room_button.clicked.connect(reciever_object.close_server)
+                # reciever_object.send_users.connect(self.send_user_signal)
+                reciever_object.moveToThread(reciever_thread)
+                reciever_object.finished.connect(reciever_thread.quit)
+                reciever_thread.started.connect(reciever_object.room_loop)
+                reciever_thread.start()
+                self.rooms.append((reciever_thread, reciever_object))
+            except OSError:
+                pass
 
     def close_server(self):
         self.reciever_object.running = False

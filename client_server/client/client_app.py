@@ -303,7 +303,7 @@ class client_ui(QtWidgets.QMainWindow, ui.Ui_MainWindow):
             # except ConnectionResetError:
             #     return
             decoded_response = json.loads(response.decode("UTF-8"))
-            if 200 >= decoded_response.get("status") < 300:
+            if decoded_response.get("status") in [200, 201]:
                 logger.info("connected")
                 self.active_rooms[self.room_number_input.text()] = decoded_response.get("Users")
                 self.current_rooms_box.clear()
