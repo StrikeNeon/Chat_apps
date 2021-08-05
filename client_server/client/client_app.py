@@ -286,7 +286,7 @@ class client_ui(QtWidgets.QMainWindow, ui.Ui_MainWindow):
         logger.debug(f"response recieved, closing {decoded_response}")
         self.client_socket.close()
 
-        if 200 >= decoded_response.get("status") < 300:
+        if decoded_response.get("status") in [200, 201]:
 
             self.client_socket = self.make_socket()
             logger.debug((self.room_service[0], int(self.room_number_input.text())))
