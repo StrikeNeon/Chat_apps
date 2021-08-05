@@ -48,8 +48,9 @@ class reciever(QObject):
                     self.recieved_message.emit((self.room, decoded_message.get('from_user'), decoded_message.get('message')))
             except json.decoder.JSONDecodeError:
                 pass
-            except ConnectionAbortedError:
+            except (ConnectionAbortedError, ConnectionResetError):
                 logger.warning("connection closed")
+                break
             sleep(0.2)
 
 
@@ -277,7 +278,10 @@ class client_ui(QtWidgets.QMainWindow, ui.Ui_MainWindow):
                     "time": datetime.timestamp(datetime.now())}
         self.client_socket.send(json.dumps(greeting).encode("UTF-8"))
         logger.debug("greeting sent")
-        response = self.client_socket.recv(1024)
+        try:
+            response = self.client_socket.recv(1024)
+        except ConnectionResetError:
+            return
         decoded_response = json.loads(response.decode("UTF-8"))
         logger.debug(f"response recieved, closing {decoded_response}")
         self.client_socket.close()

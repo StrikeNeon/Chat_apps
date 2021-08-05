@@ -213,9 +213,9 @@ class main_reciever(QObject):
                 reciever_object.send_users.connect(self.send_users.emit(self.users))
                 reciever_object.moveToThread(reciever_thread)
                 reciever_object.finished.connect(reciever_thread.quit)
-                reciever_thread.started.connect(reciever_thread.start)
+                reciever_thread.started.connect(reciever_object.room_loop)
                 reciever_thread.start()
-                self.rooms.append((reciever_thread, location))
+                self.rooms.append((reciever_object, location))
                 self.send_rooms.emit(self.rooms)
                 conn.close()
 

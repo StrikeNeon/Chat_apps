@@ -45,7 +45,7 @@ class room_socket():
         self.room_ip = ip
 
         self.room_port = port
-
+        self.room_logger.debug((self.room_ip, self.room_port))
         self.room_socket.bind((self.room_ip, self.room_port))
         self.room_logger.info("Binding successful!")
         self.room_logger.info(f"Base server bound to: {self.room_ip}:{self.room_port}")

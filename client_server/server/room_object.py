@@ -48,6 +48,7 @@ class room_socket(QObject):
     send_users = pyqtSignal(dict)
 
     def __init__(self, ip, port, limit=10):
+        super().__init__()
         self.room_logger = loguru.logger
         self.db_manager = mongo_manager()
         self.room_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
