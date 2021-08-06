@@ -228,12 +228,12 @@ class main_reciever(QObject):
                         self.base_logger.info(f"allowed user {greeting_data.get('username')} to connect to room {location}")
                     else:
                         self.base_logger.info(f"recreated room {location}")
-                        self.rooms.append(location)
+                        # self.rooms.append(location)
                     self.base_logger.info(f"allowed user {greeting_data.get('username')} to connect to room {location}")
                     db_manager.add_user_to_room(conn.getpeername(), greeting_data.get('username'), location, self.users)
                     self.users[greeting_data.get('username')] = location
                     conn.send(error_response.encode("UTF-8"))
-                    self.send_rooms.emit(self.rooms)
+                    # self.send_rooms.emit(self.rooms)
                     self.send_users.emit(self.users)
                     conn.close()
                 else:
