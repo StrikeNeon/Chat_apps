@@ -212,14 +212,6 @@ class main_reciever(QObject):
                 self.send_users.emit(self.users)
                 self.send_rooms.emit(self.rooms)
                 conn.close()
-                # self.base_logger.debug("no room found, creating")
-                # room_response = json.dumps(({"status": 201, "alert": "no room found, opening new", "time": datetime.timestamp(datetime.now())}))
-                # conn.send(room_response.encode("UTF-8"))
-                # room_thread = Thread(target=self.open_room, args=([location]))
-                # room_thread.start()
-                # self.rooms.append((room_thread, location))
-                # self.send_rooms.emit(self.rooms)
-                # conn.close()
             else:
                 if greeting_data.get('username') not in room_data.get("Blacklist"):
                     error_response = json.dumps(({"status": 200, "alert": "connection allowed", "time": datetime.timestamp(datetime.now())}))
