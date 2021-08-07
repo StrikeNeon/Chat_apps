@@ -6,7 +6,7 @@ from datetime import timedelta, datetime
 from settings import pwd_context, SECRET_KEY, ALGORITHM
 
 
-class mongo_manager():
+class MongoManager():
     def __init__(self):
         self.client = MongoClient('127.0.0.1:27017')
 

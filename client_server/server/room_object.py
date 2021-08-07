@@ -6,7 +6,7 @@ import json
 import loguru
 import schedule
 from time import sleep
-from mongo_utils import mongo_manager
+from mongo_utils import MongoManager as mongo_manager
 from datetime import datetime
 from PyQt5.QtCore import (
     QObject,
@@ -43,7 +43,7 @@ def run_continuously(interval=1):
     return cease_continuous_run
 
 
-class room_socket(QObject):
+class RoomSocket(QObject):
     finished = pyqtSignal()
     send_users = pyqtSignal(dict)
 

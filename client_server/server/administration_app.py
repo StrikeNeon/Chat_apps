@@ -5,8 +5,8 @@ import json
 import loguru
 import schedule
 from time import sleep
-from room_object import room_socket
-from mongo_utils import mongo_manager
+from room_object import RoomSocket as room_socket
+from mongo_utils import MongoManager as mongo_manager
 from datetime import datetime, timedelta
 from settings import ACCESS_TOKEN_EXPIRE_MINUTES
 from simplejson.errors import JSONDecodeError
@@ -49,12 +49,12 @@ def run_continuously(interval=1):
     return cease_continuous_run
 
 
-class main_reciever(QObject):
+class MainReciever(QObject):
     finished = pyqtSignal()
     send_rooms = pyqtSignal(list)
     send_users = pyqtSignal(dict)
 
-    def __init__(self, room_manager, ip=None, limit=10, port=6661):
+    def __init__(self, room_manager, limit=10, port=6661):
         super().__init__()
         db_manager.flush_room_zero()
         self.base_logger = loguru.logger
@@ -290,10 +290,9 @@ class main_reciever(QObject):
         self.finished.emit()
 
 
-class administration_ui(QtWidgets.QMainWindow, ui.Ui_MainWindow):
+class AdministrationUi(QtWidgets.QMainWindow, ui.Ui_MainWindow):
     def __init__(self):
-        # Это здесь нужно для доступа к переменным, методам
-        # и т.д. в файле design.py
+        """Main admin app thread"""
         super().__init__()
         self.setupUi(self)
         self.username = None
@@ -304,6 +303,7 @@ class administration_ui(QtWidgets.QMainWindow, ui.Ui_MainWindow):
         # self.db_reconnect_button.clicked.connect(self.reconnect_mongo)
 
     def login(self):
+        """verify with config or env variables"""
         if not self.username:
             self.username = self.login_input.text()
             self.password = self.password_input.text()
@@ -313,9 +313,12 @@ class administration_ui(QtWidgets.QMainWindow, ui.Ui_MainWindow):
             sys.exit(1)
 
     def render_users(self, users):
+        """transform users dict to string and show it in main tab"""
         self.room_zero_tab.log_box.setText("\n".join([f"user {key} in {value}" for key, value in users.items()]))
 
     def render_rooms(self, rooms):
+        """this method will open a new room and add it's tab
+           A room is a socket occupying a separate thread"""
         self.room_zero_tab.user_counter.setNumDigits(len(rooms))
         if len(rooms) != len(self.rooms):
             location = rooms[-1]
@@ -345,10 +348,11 @@ class administration_ui(QtWidgets.QMainWindow, ui.Ui_MainWindow):
         self.reciever_object.running = False
 
     def switch_to_admin(self):
+        """Room zero will open on successful login. It's a preset socket at hostname:6661 in a separate thread"""
 
         self.stackedWidget.setCurrentIndex(0)
 
-        self.reciever_object = main_reciever(room_manager=self.room_manager, ip="127.0.0.1")
+        self.reciever_object = MainReciever(room_manager=self.room_manager)
 
         self.reciever_thread = QThread()
         self.room_zero_tab.close_room_button.clicked.connect(self.close_server)
@@ -374,8 +378,10 @@ class administration_ui(QtWidgets.QMainWindow, ui.Ui_MainWindow):
 
 def main():
     app = QtWidgets.QApplication(sys.argv)
-    admin_ui = administration_ui()
+    admin_ui = AdministrationUi()
     admin_ui.show()
     sys.exit(app.exec_())
 
-main()
+
+if __name__ == '__main__':
+    main()

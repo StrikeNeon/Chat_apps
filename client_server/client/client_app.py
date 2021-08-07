@@ -16,7 +16,7 @@ from time import sleep
 import collections
 
 
-class reciever(QObject):
+class Reciever(QObject):
     finished = pyqtSignal()
     recieved_message = pyqtSignal(tuple)
     recount_users = pyqtSignal(dict)
@@ -54,7 +54,7 @@ class reciever(QObject):
             sleep(0.2)
 
 
-class client_ui(QtWidgets.QMainWindow, ui.Ui_MainWindow):
+class ClientUi(QtWidgets.QMainWindow, ui.Ui_MainWindow):
     def __init__(self):
         # Это здесь нужно для доступа к переменным, методам
         # и т.д. в файле design.py
@@ -310,7 +310,8 @@ class client_ui(QtWidgets.QMainWindow, ui.Ui_MainWindow):
                 self.current_rooms_box.setText("\n".join(self.active_rooms.keys()))
                 users = {self.room_number_input.text(): decoded_response.get("Users")}
                 self.update_users(users)
-                self.reciever_object = reciever(self.client_socket, self.room_number_input.text())
+                self.reciever_object = Reciever(self.client_socket,
+                                                self.room_number_input.text())
 
                 self.reciever_thread = QThread()
 
@@ -397,9 +398,10 @@ class client_ui(QtWidgets.QMainWindow, ui.Ui_MainWindow):
 
 def main():
     app = QtWidgets.QApplication(sys.argv)
-    admin_ui = client_ui()
+    admin_ui = ClientUi()
     admin_ui.show()
     sys.exit(app.exec_())
 
 
-main()
+if __name__ == '__main__':
+    main()
