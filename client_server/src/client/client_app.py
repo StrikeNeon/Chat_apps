@@ -17,9 +17,12 @@ import collections
 
 
 class Reciever(QObject):
+    """Message reciever object, hangles decoding and parsing"""
     finished = pyqtSignal()
     recieved_message = pyqtSignal(tuple)
+    """emmited when a message is recieved"""
     recount_users = pyqtSignal(dict)
+    """emmited when a user logs into a room"""
 
     def __init__(self, socket, room):
         super().__init__()
@@ -30,6 +33,9 @@ class Reciever(QObject):
 
     @pyqtSlot()
     def start(self):
+        """Main reciever loop, automatically sends out a presence message,
+           updates users upon recieving an alert message,
+           emits message signal if recieved message is not empty"""
         while self.connected:
             try:
                 message = self.socket.recv(1024)
@@ -55,9 +61,10 @@ class Reciever(QObject):
 
 
 class ClientUi(QtWidgets.QMainWindow, ui):
+    """App logic class, ui is initialised here,
+       so all callbacks for ui functions should lead to this class
+       most messages are self explanatory, too simple codewise to document"""
     def __init__(self):
-        # Это здесь нужно для доступа к переменным, методам
-        # и т.д. в файле design.py
         super().__init__()
         self.room_service = ("192.168.56.1", 6661)
         self.ip = "localhost"
@@ -89,6 +96,7 @@ class ClientUi(QtWidgets.QMainWindow, ui):
         self.refresh_rooms_button.clicked.connect(self.refresh_rooms)
 
     def make_socket(self):
+        """A method for tcp socket creation"""
         client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         # client_socket.bind(('', self.port))
         logger.debug(f"made socket |{client_socket}")
@@ -112,6 +120,7 @@ class ClientUi(QtWidgets.QMainWindow, ui):
         self.stackedWidget.setCurrentIndex(4)
 
     def send_message(self):
+        """encrypt message text and send it to all users in room"""
         message = self.message_input_box.toPlainText()
         if message:
             # encrypted_message = self.cypher.encrypt(bytes(message, encoding="utf-8"))
@@ -124,6 +133,7 @@ class ClientUi(QtWidgets.QMainWindow, ui):
             self.add_message(f"you: {message}")
 
     def send_message_to_user(self):
+        """encrypt and sent to a user selected in combobox (currently doesn't work lol)"""
         user = self.user_choice_box.currentText()
         message = self.message_input_box.toPlainText()
         if message and user:
@@ -157,6 +167,7 @@ class ClientUi(QtWidgets.QMainWindow, ui):
             self.client_socket.send(json.dumps(structured_message).encode("UTF-8"))
 
     def send_quit(self):
+        """send a quit message and close socket"""
         structured_message = {"action": "QUIT", "time": datetime.timestamp(datetime.now())}
         try:
             self.client_socket.send(json.dumps(structured_message).encode("UTF-8"))
@@ -167,6 +178,7 @@ class ClientUi(QtWidgets.QMainWindow, ui):
             pass
 
     def update_users(self, users):
+        """add new users to combobox"""
         logger.debug(users)
         room = list(users.keys())[0]
         self.active_rooms[room] = users.get(room)
@@ -231,6 +243,9 @@ class ClientUi(QtWidgets.QMainWindow, ui):
                 return decoded_response
 
     def add_message(self, message):
+        """parses a message to match user ip and username,
+           formats and adds to message queue,
+           finally the queue is output into message box"""
         try:
             if type(message) == str:
                 formatted_message = ('\t'*5)+message
