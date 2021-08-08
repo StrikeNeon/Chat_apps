@@ -5,10 +5,9 @@ import json
 import loguru
 import schedule
 from time import sleep
-from room_object import RoomSocket as room_socket
-from mongo_utils import MongoManager as mongo_manager
+from .room_object import RoomSocket as room_socket
+from .mongo_utils import MongoManager as mongo_manager
 from datetime import datetime, timedelta
-from settings import ACCESS_TOKEN_EXPIRE_MINUTES
 from simplejson.errors import JSONDecodeError
 from PyQt5 import QtWidgets, QtWebSockets, QtGui, QtCore
 from PyQt5.QtCore import (
@@ -17,46 +16,29 @@ from PyQt5.QtCore import (
     pyqtSlot,
     QThread
 )
-import administration_ui as ui  # design file
-from settings import ADMIN_LOGIN, ADMIN_PASSWORD
+from .administration_ui import Ui_MainWindow as ui  # design file
+from .administration_ui import room_tab as ui_room_tab  # design file
+from .settings import ADMIN_LOGIN, ADMIN_PASSWORD, ACCESS_TOKEN_EXPIRE_MINUTES
 from loguru import logger
 
 db_manager = mongo_manager()
 _translate = QtCore.QCoreApplication.translate # this is here to translate ui dynamically
 
-def run_continuously(interval=1):
-    """Continuously run, while executing pending jobs at each
-    elapsed time interval.
-    @return cease_continuous_run: threading. Event which can
-    be set to cease continuous run. Please note that it is
-    *intended behavior that run_continuously() does not run
-    missed jobs*. For example, if you've registered a job that
-    should run every minute and you set a continuous run
-    interval of one hour then your job won't be run 60 times
-    at each interval but only once.
-    """
-    cease_continuous_run = Event()
-
-    class ScheduleThread(Thread):
-        @classmethod
-        def run(cls):
-            while not cease_continuous_run.is_set():
-                schedule.run_pending()
-                sleep(interval)
-
-    continuous_thread = ScheduleThread()
-    continuous_thread.start()
-    return cease_continuous_run
-
 
 class MainReciever(QObject):
+    """ws based message server - handles logins, registration and user greetings
+       both this and room object only handle operation dispatch logic,
+       all db-relevant operation code in in mongo utilities"""
     finished = pyqtSignal()
     send_rooms = pyqtSignal(list)
+    """emiting this signal will open a new tab, starting a new room"""
     send_users = pyqtSignal(dict)
+    """emiting this signal will send user dictionary for rendering in main thread"""
 
     def __init__(self, room_manager, limit=10, port=6661):
         super().__init__()
         db_manager.flush_room_zero()
+        """room zero records purged on startup"""
         self.base_logger = loguru.logger
 
         self.base_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -78,6 +60,7 @@ class MainReciever(QObject):
         self.room_manager = room_manager
 
     def login_required(func):
+        """decorator for jwt token verification"""
         def token_check(self, greeting_data, conn):
             if not greeting_data.get("token"):
                 error_response = json.dumps(({"status": 403, "alert": "not logged in", "time": datetime.timestamp(datetime.now())}))
@@ -95,6 +78,8 @@ class MainReciever(QObject):
         return token_check
 
     def register_user(self, greeting_data, conn):
+        """user registration method - verifies that user is unique,
+           sends response if successful"""
         if not greeting_data.get('username') or not greeting_data.get('password'):
             added = None
         else:
@@ -109,6 +94,8 @@ class MainReciever(QObject):
             conn.close()
 
     def login_user(self, greeting_data, conn):
+        """verifies user data sent in message,
+            creates jwt token and sends it on successful"""
         if not greeting_data.get('username') or not greeting_data.get('password'):
             error_response = json.dumps(({"status": 400, "alert": "greeting data malformed", "time": datetime.timestamp(datetime.now())}))
             conn.send(error_response.encode("UTF-8"))
@@ -130,6 +117,8 @@ class MainReciever(QObject):
 
     @login_required
     def find_users(self, greeting_data, conn):
+        """seraches through room zero records,
+           sends room locations of users in sender's contacts if found"""
         if not greeting_data.get('contacts'):
             error_response = json.dumps(({"status": 400, "alert": "greeting data malformed", "time": datetime.timestamp(datetime.now())}))
             conn.send(error_response.encode("UTF-8"))
@@ -147,6 +136,7 @@ class MainReciever(QObject):
 
     @login_required
     def get_user_data(self, greeting_data, conn):
+        """retrieves user info (profile) from db"""
         if not greeting_data.get('username'):
             error_response = json.dumps(({"status": 400, "alert": "greeting data malformed", "time": datetime.timestamp(datetime.now())}))
             conn.send(error_response.encode("UTF-8"))
@@ -168,6 +158,7 @@ class MainReciever(QObject):
 
     @login_required
     def get_room_data(self, greeting_data, conn):
+        """retrieves room data (user amount) from db"""
         room_data = db_manager.get_room_data()
         if room_data:
             error_response = json.dumps(({"status": 200, "alert": "room data retrieved", "room_data": room_data, "time": datetime.timestamp(datetime.now())}))
@@ -180,6 +171,8 @@ class MainReciever(QObject):
 
     @login_required
     def greet(self, greeting_data, conn):
+        """allows the user into room or creates a new one after verification
+           also emits users signal and rooms signal if new room is created"""
         if not greeting_data.get('username') or not greeting_data.get("target_room"):
             error_response = json.dumps(({"status": 400, "alert": "data malformed", "time": datetime.timestamp(datetime.now())}))
             conn.send(error_response.encode("UTF-8"))
@@ -220,12 +213,10 @@ class MainReciever(QObject):
                         self.base_logger.info(f"allowed user {greeting_data.get('username')} to connect to room {location}")
                     else:
                         self.base_logger.info(f"recreated room {location}")
-                        # self.rooms.append(location)
                     self.base_logger.info(f"allowed user {greeting_data.get('username')} to connect to room {location}")
                     db_manager.add_user_to_room(conn.getpeername(), greeting_data.get('username'), location, self.users)
                     self.users[greeting_data.get('username')] = location
                     conn.send(error_response.encode("UTF-8"))
-                    # self.send_rooms.emit(self.rooms)
                     self.send_users.emit(self.users)
                     conn.close()
                 else:
@@ -234,20 +225,10 @@ class MainReciever(QObject):
                     conn.close()
                     self.base_logger.warning("user blacklisted")
 
-    def send_user_signal(self):
-        self.send_users.emit(self.users)
-
-    def open_room(self, port):
-        room = room_socket(self.base_ip, port)
-        if not db_manager.room_collection.find_one({"ROOM": port}):
-            self.base_logger.debug("creating_room")
-            db_manager.add_room(port)
-        room.room_loop()
-        self.base_logger.info(f"room {port} closed")
-        db_manager.remove_room(port)
-
     @pyqtSlot()
     def start(self):
+        """This a main server loop - handles operations
+           specified by operation key in message"""
         self.base_logger.debug("main loop started")
         while self.running:
             try:
@@ -290,24 +271,22 @@ class MainReciever(QObject):
         self.finished.emit()
 
 
-class AdministrationUi(QtWidgets.QMainWindow, ui.Ui_MainWindow):
+class AdministrationUi(QtWidgets.QMainWindow, ui):
     def __init__(self):
         """Main admin app thread"""
         super().__init__()
         self.setupUi(self)
-        self.username = None
-        self.password = None
         self.rooms = []
+        """a list of currently active rooms, tab management logic is using this for reference"""
 
         self.start_server.clicked.connect(self.login)
         # self.db_reconnect_button.clicked.connect(self.reconnect_mongo)
 
     def login(self):
         """verify with config or env variables"""
-        if not self.username:
-            self.username = self.login_input.text()
-            self.password = self.password_input.text()
-        if self.username == ADMIN_LOGIN and self.password == ADMIN_PASSWORD:
+        username = self.login_input.text()
+        password = self.password_input.text()
+        if username == ADMIN_LOGIN and password == ADMIN_PASSWORD:
             self.switch_to_admin()
         else:
             sys.exit(1)
@@ -324,7 +303,7 @@ class AdministrationUi(QtWidgets.QMainWindow, ui.Ui_MainWindow):
             location = rooms[-1]
             try:
                 reciever_object = room_socket(ip=self.reciever_object.base_ip, port=location)
-                new_room = ui.room_tab(self.room_manager)
+                new_room = ui_room_tab.room_tab(self.room_manager)
 
                 new_room.close_room_button.setText(_translate("MainWindow", "close room"))
                 new_room.room_num_lable.setText(_translate("MainWindow", "room_num"))
@@ -335,7 +314,6 @@ class AdministrationUi(QtWidgets.QMainWindow, ui.Ui_MainWindow):
                 self.room_manager.addTab(new_room, f'room_{location}_tab')
                 reciever_thread = QThread()
                 new_room.close_room_button.clicked.connect(reciever_object.close_server)
-                # reciever_object.send_users.connect(self.send_user_signal)
                 reciever_object.moveToThread(reciever_thread)
                 reciever_object.finished.connect(reciever_thread.quit)
                 reciever_thread.started.connect(reciever_object.room_loop)

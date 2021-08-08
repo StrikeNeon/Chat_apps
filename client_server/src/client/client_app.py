@@ -9,7 +9,7 @@ from PyQt5.QtCore import (
     pyqtSlot,
     QThread
 )
-import client_ui as ui  # design file
+from .client_ui import Ui_MainWindow as ui  # design file
 from loguru import logger
 from datetime import datetime
 from time import sleep
@@ -54,7 +54,7 @@ class Reciever(QObject):
             sleep(0.2)
 
 
-class ClientUi(QtWidgets.QMainWindow, ui.Ui_MainWindow):
+class ClientUi(QtWidgets.QMainWindow, ui):
     def __init__(self):
         # Это здесь нужно для доступа к переменным, методам
         # и т.д. в файле design.py

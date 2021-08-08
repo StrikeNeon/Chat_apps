@@ -7,11 +7,20 @@ Welcome to ws client-server chat's documentation!
 =================================================
 
 .. toctree::
-   :maxdepth: 2
+   :maxdepth: 4
    :caption: Contents:
 
 
-.. automodule:: server
+
+.. automodule:: server.administration_app
+   :members:
+.. automodule:: server.room_object
+   :members:
+.. automodule:: server.mongo_utils
+   :members:
+
+.. automodule:: client.client_app
+   :members:
 
 Indices and tables
 ==================

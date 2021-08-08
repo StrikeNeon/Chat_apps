@@ -6,7 +6,7 @@ import json
 import loguru
 import schedule
 from time import sleep
-from mongo_utils import MongoManager as mongo_manager
+from .mongo_utils import MongoManager as mongo_manager
 from datetime import datetime
 from PyQt5.QtCore import (
     QObject,
@@ -44,8 +44,12 @@ def run_continuously(interval=1):
 
 
 class RoomSocket(QObject):
+    """Individual room socket thread, handles in-room operations
+       both this and main reciever only handle operation dispatch logic,
+       all db-relevant operation code in in mongo utilities"""
     finished = pyqtSignal()
     send_users = pyqtSignal(dict)
+    """emitting this signal will send the user dict"""
 
     def __init__(self, ip, port, limit=10):
         super().__init__()
@@ -69,12 +73,16 @@ class RoomSocket(QObject):
         self.active = True
 
     def log_online_users(self):
+        """scheduled operation, logs online users,
+           if there are no users logs an error message,
+           as room should be closed"""
         if len(self.inputs) > 0:
             self.room_logger.info(f"users online: {len(self.inputs)-1}|  {self.inputs[1:]}")
         else:
             self.room_logger.error("Inputs ceased existing, but the loop still runs")
 
     def cleanup(self):
+        """scheduled operation for closing the room if there are no users online"""
         self.room_logger.debug("checking activity")
         if len(self.inputs) == 1:
             self.inputs.pop(0)
@@ -83,6 +91,8 @@ class RoomSocket(QObject):
             self.room_logger.info("active status unset")
 
     def presence(self):
+        """scheduled operation for sending presence mesasges
+           and removing users if the don't respond"""
         timeout = 5
         closing = []
         self.room_logger.debug("sending presences")
@@ -110,6 +120,8 @@ class RoomSocket(QObject):
 
     @pyqtSlot()
     def room_loop(self):
+        """main room loop, sets up scheduled operations,
+           then iterates over connected sockets to handle message input-output"""
         schedule.every(5).minutes.do(self.log_online_users)
         schedule.every(5).minutes.do(self.presence)
         schedule.every(1).minutes.do(self.cleanup)
@@ -131,6 +143,7 @@ class RoomSocket(QObject):
             sleep(0.2)
 
     def send_data(self, s):
+        """parses next message in socket's queue, sends the message to user specified by at_user key in message"""
         self.room_logger.debug(f"sending message to {s.getpeername()}")
         try:
             next_msg = self.message_queues[s.getpeername()].get_nowait()
@@ -157,6 +170,9 @@ class RoomSocket(QObject):
             self.outputs.remove(s)
 
     def recieve_data(self, s):
+        """method for recieving messages and veryfing data in them
+           handles room greetings, as there is an additional token verification
+           also handles adding to and removing from contacts"""
         if s is self.room_socket:
             # A "readable" server socket is ready to accept a connection
             connection, client_address = s.accept()
