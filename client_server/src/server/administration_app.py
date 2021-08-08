@@ -1,9 +1,7 @@
 import sys
-from threading import Thread, Event
 import socket
 import json
 import loguru
-import schedule
 from time import sleep
 from room_object import RoomSocket as room_socket
 from mongo_utils import MongoManager as mongo_manager
@@ -353,14 +351,3 @@ class AdministrationUi(QtWidgets.QMainWindow, ui):
         except AttributeError:
             pass
         event.accept()  # let the window close
-
-
-def main():
-    app = QtWidgets.QApplication(sys.argv)
-    admin_ui = AdministrationUi()
-    admin_ui.show()
-    sys.exit(app.exec_())
-
-
-if __name__ == '__main__':
-    main()

@@ -409,14 +409,3 @@ class ClientUi(QtWidgets.QMainWindow, ui):
     def closeEvent(self, event):
         logger.info("exiting")
         event.accept()  # let the window close
-
-
-def main():
-    app = QtWidgets.QApplication(sys.argv)
-    admin_ui = ClientUi()
-    admin_ui.show()
-    sys.exit(app.exec_())
-
-
-if __name__ == '__main__':
-    main()

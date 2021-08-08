@@ -5,5 +5,5 @@ old_files
 *.ui
 *.json
 *.pem
-html
+build
 cli_serv_venv
