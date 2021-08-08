@@ -1,0 +1,8 @@
+README.md
+setup.cfg
+setup.py
+src/__init__.py
+worlds_worst_chat_app.egg-info/PKG-INFO
+worlds_worst_chat_app.egg-info/SOURCES.txt
+worlds_worst_chat_app.egg-info/dependency_links.txt
+worlds_worst_chat_app.egg-info/top_level.txt

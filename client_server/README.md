@@ -1,0 +1,1 @@
+## A server and a client to setup a simple socket-based chat app

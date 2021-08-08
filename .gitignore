@@ -2,3 +2,8 @@ room_db
 venv
 old_files
 *.pyc
+*.ui
+*.json
+*.pem
+build
+cli_serv_venv
