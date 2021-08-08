@@ -7,9 +7,11 @@ from settings import pwd_context, SECRET_KEY, ALGORITHM
 
 
 class MongoManager():
+    """This class has all the code for db-relevant operations in the project,
+       also sec operations are here for now"""
     def __init__(self):
-        """This class has all the code for db-relevant operations in the project,
-        also sec operations are here for now"""
+        """sets up a mongo connection, specifies db name,
+           room and user collection names"""
         self.client = MongoClient('127.0.0.1:27017')
 
         self.db = self.client['chat_apps']

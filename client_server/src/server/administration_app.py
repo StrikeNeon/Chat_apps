@@ -302,7 +302,7 @@ class AdministrationUi(QtWidgets.QMainWindow, ui):
         if len(rooms) != len(self.rooms):
             location = rooms[-1]
             try:
-                reciever_object = room_socket(ip=self.reciever_object.base_ip, port=location)
+                reciever_object = room_socket(ip=self.reciever_object.base_ip, port=location, manager=self.room_manager)
                 new_room = ui_room_tab(self.room_manager)
 
                 new_room.close_room_button.setText(_translate("MainWindow", "close room"))
@@ -318,6 +318,7 @@ class AdministrationUi(QtWidgets.QMainWindow, ui):
                 reciever_object.finished.connect(reciever_thread.quit)
                 reciever_thread.started.connect(reciever_object.room_loop)
                 reciever_thread.start()
+                reciever_object.room_index = self.room_manager.indexOf(new_room)
                 self.rooms.append((reciever_thread, reciever_object))
             except OSError:
                 pass

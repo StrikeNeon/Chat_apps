@@ -10,21 +10,32 @@ Welcome to ws client-server chat's documentation!
    :maxdepth: 4
    :caption: Contents:
 
-
-
-.. automodule:: server.administration_app
-   :members:
-.. automodule:: server.room_object
-   :members:
-.. automodule:: server.mongo_utils
-   :members:
-
-.. automodule:: client.client_app
-   :members:
-
 Indices and tables
 ==================
 
 * :ref:`genindex`
 * :ref:`modindex`
 * :ref:`search`
+
+Contents
+========
+
+Administration app module
+=========================
+.. automodule:: server.administration_app
+   :members:
+
+Room object module
+==================
+.. automodule:: server.room_object
+   :members:
+
+Mongo utilities module
+======================
+.. automodule:: server.mongo_utils
+   :members:
+
+Client app module
+=================
+.. automodule:: client.client_app
+   :members:

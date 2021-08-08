@@ -51,14 +51,16 @@ class RoomSocket(QObject):
     send_users = pyqtSignal(dict)
     """emitting this signal will send the user dict"""
 
-    def __init__(self, ip, port, limit=10):
+    def __init__(self, ip, port, manager, limit=10):
         super().__init__()
+        self.room_manager = manager
         self.room_logger = loguru.logger
         self.db_manager = mongo_manager()
         self.room_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.room_ip = ip
 
         self.room_port = port
+        self.room_index = None
         self.room_socket.bind((self.room_ip, self.room_port))
         self.room_logger.info("Binding successful!")
         self.room_logger.info(f"room bound to: {self.room_ip}:{self.room_port}")
@@ -306,5 +308,6 @@ class RoomSocket(QObject):
         self.schedule_event.set()
         self.room_logger.debug("event running stopped")
         self.room_socket.close()
+        self.room_manager.removeTab(self.room_index)
         self.finished.emit()
         self.room_logger.info(f"room {self.room_port} finished")
