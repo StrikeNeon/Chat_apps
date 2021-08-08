@@ -5,8 +5,8 @@ import json
 import loguru
 import schedule
 from time import sleep
-from .room_object import RoomSocket as room_socket
-from .mongo_utils import MongoManager as mongo_manager
+from room_object import RoomSocket as room_socket
+from mongo_utils import MongoManager as mongo_manager
 from datetime import datetime, timedelta
 from simplejson.errors import JSONDecodeError
 from PyQt5 import QtWidgets, QtWebSockets, QtGui, QtCore
@@ -16,9 +16,9 @@ from PyQt5.QtCore import (
     pyqtSlot,
     QThread
 )
-from .administration_ui import Ui_MainWindow as ui  # design file
-from .administration_ui import room_tab as ui_room_tab  # design file
-from .settings import ADMIN_LOGIN, ADMIN_PASSWORD, ACCESS_TOKEN_EXPIRE_MINUTES
+from administration_ui import Ui_MainWindow as ui  # design file
+from administration_ui import room_tab as ui_room_tab  # design file
+from settings import ADMIN_LOGIN, ADMIN_PASSWORD, ACCESS_TOKEN_EXPIRE_MINUTES
 from loguru import logger
 
 db_manager = mongo_manager()
@@ -303,7 +303,7 @@ class AdministrationUi(QtWidgets.QMainWindow, ui):
             location = rooms[-1]
             try:
                 reciever_object = room_socket(ip=self.reciever_object.base_ip, port=location)
-                new_room = ui_room_tab.room_tab(self.room_manager)
+                new_room = ui_room_tab(self.room_manager)
 
                 new_room.close_room_button.setText(_translate("MainWindow", "close room"))
                 new_room.room_num_lable.setText(_translate("MainWindow", "room_num"))

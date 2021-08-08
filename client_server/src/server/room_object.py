@@ -6,7 +6,7 @@ import json
 import loguru
 import schedule
 from time import sleep
-from .mongo_utils import MongoManager as mongo_manager
+from mongo_utils import MongoManager as mongo_manager
 from datetime import datetime
 from PyQt5.QtCore import (
     QObject,
@@ -131,7 +131,10 @@ class RoomSocket(QObject):
             readable, writable, exceptional = select.select(self.inputs, self.outputs, self.inputs)
             # Handle inputs
             for s in readable:
-                self.recieve_data(s)
+                try:
+                    self.recieve_data(s)
+                except OSError:
+                    return
             # TODO figure out that weird queue block error
             # Handle outputs
             for s in writable:

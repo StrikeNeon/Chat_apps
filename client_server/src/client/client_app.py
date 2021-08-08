@@ -9,7 +9,7 @@ from PyQt5.QtCore import (
     pyqtSlot,
     QThread
 )
-from .client_ui import Ui_MainWindow as ui  # design file
+from client_ui import Ui_MainWindow as ui  # design file
 from loguru import logger
 from datetime import datetime
 from time import sleep

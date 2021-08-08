@@ -3,7 +3,7 @@ import loguru
 from passlib.exc import UnknownHashError
 from jose import JWTError, jwt
 from datetime import timedelta, datetime
-from .settings import pwd_context, SECRET_KEY, ALGORITHM
+from settings import pwd_context, SECRET_KEY, ALGORITHM
 
 
 class MongoManager():
