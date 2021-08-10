@@ -158,14 +158,17 @@ class MainReciever(QObject):
     def get_room_data(self, greeting_data, conn):
         """retrieves room data (user amount) from db"""
         room_data = db_manager.get_room_data()
-        if room_data:
-            error_response = json.dumps(({"status": 200, "alert": "room data retrieved", "room_data": room_data, "time": datetime.timestamp(datetime.now())}))
-            conn.send(error_response.encode("UTF-8"))
-            conn.close()
-        elif room_data == 500:
+        self.base_logger.debug(f"rooms {room_data}")
+        if room_data == 500:
             error_response = json.dumps(({"status": 500, "alert": "server error", "time": datetime.timestamp(datetime.now())}))
             conn.send(error_response.encode("UTF-8"))
             conn.close()
+            return
+        error_response = json.dumps(({"status": 200, "alert": "room data retrieved", "room_data": room_data, "time": datetime.timestamp(datetime.now())}))
+        self.base_logger.debug(error_response)
+        conn.send(error_response.encode("UTF-8"))
+        conn.close()
+        self.base_logger.debug("sent and closed")
 
     @login_required
     def greet(self, greeting_data, conn):
@@ -237,6 +240,7 @@ class MainReciever(QObject):
                 greeting_data = json.loads((conn.recv(1024)).decode("UTF-8"))
                 operation = greeting_data.get("action", None)
                 if operation:
+                    self.base_logger.debug(f'Connected From: {conn.getpeername()} op {operation}')
                     if operation == "login":
                         self.login_user(greeting_data, conn)
                     if operation == "GREETING":
